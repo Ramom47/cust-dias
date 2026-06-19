@@ -164,7 +164,6 @@ async function gerarDeliberacoes(form) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 3000, system: sys, messages: [{ role: "user", content: usr }] }),
   });
-
   let d;
   try {
     d = await r.json();
@@ -175,6 +174,109 @@ async function gerarDeliberacoes(form) {
   if (!r.ok) throw new Error(`Erro HTTP ${r.status}.`);
   if (!Array.isArray(d.content)) throw new Error("Resposta sem conteúdo de texto.");
   return d.content.map(b => b.text || "").join("");
+}
+
+// ── ZIP / DOCX builder (pure browser JS – sem dependências) ──────────
+function makeDocx(files) {
+  function enc(s) { return new TextEncoder().encode(s); }
+  function u16(n) { const b=new Uint8Array(2); new DataView(b.buffer).setUint16(0,n,true); return b; }
+  function u32(n) { const b=new Uint8Array(4); new DataView(b.buffer).setUint32(0,n,true); return b; }
+  function cat(...a) { const t=a.reduce((s,x)=>s+x.length,0),r=new Uint8Array(t); let o=0; a.forEach(x=>{r.set(x,o);o+=x.length;}); return r; }
+  const T=new Int32Array(256);
+  for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?0xEDB88320^(c>>>1):c>>>1;T[i]=c;}
+  function crc(d){let c=-1;for(let i=0;i<d.length;i++)c=(c>>>8)^T[(c^d[i])&0xFF];return(c^-1)>>>0;}
+  const LH=[],CD=[]; let off=0;
+  for(const {name,data} of files){
+    const nm=enc(name), dt=typeof data==='string'?enc(data):data, ck=crc(dt), sz=dt.length;
+    const lh=cat(new Uint8Array([0x50,0x4B,0x03,0x04]),u16(20),u16(0),u16(0),u16(0),u16(0),u32(ck),u32(sz),u32(sz),u16(nm.length),u16(0),nm,dt);
+    CD.push(cat(new Uint8Array([0x50,0x4B,0x01,0x02]),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(ck),u32(sz),u32(sz),u16(nm.length),u16(0),u16(0),u16(0),u16(0),u32(32),u32(off),nm));
+    LH.push(lh); off+=lh.length;
+  }
+  const cd=cat(...CD);
+  const eo=cat(new Uint8Array([0x50,0x4B,0x05,0x06]),u16(0),u16(0),u16(files.length),u16(files.length),u32(cd.length),u32(off),u16(0));
+  return new Blob([...LH,cd,eo],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+}
+
+function buildDocxBlob(form) {
+  const xe=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const G='Garamond',SZ='26',LINE='360',AFT='240';
+  // Margens exatas: Superior 3,95cm | Inferior 0,75cm | Esquerda 3cm | Direita 2cm
+  // Em DXA (twips): 1cm ≈ 567 DXA
+  const PG_TOP=2240, PG_BOT=425, PG_LEFT=1701, PG_RIGHT=1134, PG_HDR=680, PG_FTR=215;
+  const CW=PG_LEFT+PG_RIGHT>0?11906-PG_LEFT-PG_RIGHT:9071; // 11906 - 1701 - 1134 = 9071
+  const C1=Math.floor(CW*0.45), C2=CW-C1;
+  const BORD='<w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/>';
+  const CMAR='<w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar>';
+  const rpr=({bold=false,underline=false,italic=false}={})=>`<w:rPr><w:rFonts w:ascii="${G}" w:hAnsi="${G}" w:cs="${G}"/>${bold?'<w:b/><w:bCs/>':''}${italic?'<w:i/><w:iCs/>':''}${underline?'<w:u w:val="single"/>':''}<w:sz w:val="${SZ}"/><w:szCs w:val="${SZ}"/></w:rPr>`;
+  const ppr=({align='both',before=0,after=AFT,ind=0,fill=''}={})=>`<w:pPr><w:jc w:val="${align}"/><w:spacing w:before="${before}" w:after="${after}" w:line="${LINE}" w:lineRule="exact"/>${ind?`<w:ind w:left="${ind}"/>`:''}${fill?`<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/>`:''}${rpr()}</w:pPr>`;
+  const tr=(text,opts={})=>text!=null&&String(text).length?`<w:r>${rpr(opts)}<w:t xml:space="preserve">${xe(text)}</w:t></w:r>`:'';
+  const para=(runs,opts={})=>`<w:p>${ppr(opts)}${runs}</w:p>`;
+  function parseRuns(text){
+    let xml='';const rx=/(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*)/g;let last=0,m;
+    while((m=rx.exec(text))!==null){
+      if(m.index>last)xml+=tr(text.slice(last,m.index));
+      const s=m[0];
+      if(s.startsWith('***'))xml+=tr(s.slice(3,-3),{bold:true,underline:true});
+      else if(s.startsWith('**')){const i=s.slice(2,-2);const caps=i===i.toUpperCase()&&/[A-ZÁÉÍÓÚÃÕÇ]/.test(i);xml+=tr(i,{bold:true,underline:caps});}
+      else xml+=tr(s.slice(1,-1),{italic:true});
+      last=m.index+s.length;
+    }
+    if(last<text.length)xml+=tr(text.slice(last));
+    return xml;
+  }
+  const mkCell=(cnt,w,{fill='',span=1}={})=>`<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${span>1?`<w:gridSpan w:val="${span}"/>`:''}` +
+    `<w:tcBorders>${BORD}</w:tcBorders>${fill?`<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/>`:''}${CMAR}</w:tcPr>${cnt}</w:tc>`;
+  const mkRow=cells=>`<w:tr>${cells}</w:tr>`;
+  const mkTable=(rows,cols)=>{const tot=cols.reduce((a,b)=>a+b,0);return`<w:tbl><w:tblPr><w:tblW w:w="${tot}" w:type="dxa"/><w:tblBorders>${BORD}</w:tblBorders></w:tblPr><w:tblGrid>${cols.map(w=>`<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${rows}</w:tbl>`;};
+  const secTbl=(title,rows)=>mkTable(mkRow(mkCell(para(tr(title,{bold:true}),{align:'center'}),CW,{fill:'E8E8E8',span:2}))+rows.map(([k,v])=>mkRow(mkCell(para(tr(k,{bold:true})),C1)+mkCell(para(tr(String(v),{bold:true})),C2))).join(''),[C1,C2]);
+  const pairTbl=rows=>mkTable(rows.map(([k,v])=>mkRow(mkCell(para(tr(k,{bold:true})),C1)+mkCell(para(tr(String(v),{bold:true})),C2))).join(''),[C1,C2]);
+
+  const isEx=form.tipo==='EXECUTIVO';
+  const filiacao=[form.filiacaoPai,form.filiacaoMae].filter(Boolean).join(' E ')||'—';
+  const idade=calcAge(form.dataNasc);
+  const dnStr=form.dataNasc?`${fmtD(form.dataNasc)}${idade?' ('+idade+')':''}`:'—';
+  const docStr=[form.cpf?'CPF: '+form.cpf:'',form.rg?'RG: '+form.rg:''].filter(Boolean).join(' ')||'—';
+  const auto=form.numAutoMandado||form.numProcesso||'—';
+  const termTitle=isEx?'TERMO DE AUDIÊNCIA DE CUSTÓDIA/JUSTIFICAÇÃO':'TERMO DE AUDIÊNCIA DE CUSTÓDIA';
+  const gravacao=`Foi informado que a qualificação do Custodiado e as manifestações do Ministério Público e da Defesa seriam documentadas por sistema audiovisual e que o arquivo digital correspondente seria posteriormente lançado ao ${form.sistemaBNMP||'PJe'}.`;
+  const aberturas=isEx
+    ?[`Aberta a audiência foi constatada a presença do Reeducando ${form.nomeAutuado}, do Promotor de Justiça e do ${form.cargoDefensor}.`,
+      `O reeducando afirmou o seu atual endereço: ${form.enderecoDeclarado||form.endereco} e também afirmou que vai dar início ao cumprimento da condenação em execução no PEP n.º ${form.numPEP||'—'}, em trâmite nesta Comarca.`,
+      `O Ministério Público manifestou pelo acolhimento da justificativa apresentada, bem como pugna para que o recuperando dê início ao cumprimento da pena, no regime ${(form.regimeMantido||'aberto').toLowerCase()}.`,
+      `A Defesa requereu o acolhimento da justificativa apresentada, mantendo-o no regime ${(form.regimeMantido||'aberto').toLowerCase()}.`,
+      'A justificativa apresentada foi gravada, sendo disponibilizada em anexo a esta decisão.']
+    :[`Aos ${fmtExt(form.dataAudiencia)||'[DATA]'}, às ${form.horaAudiencia}h, na sala de audiências da 3ª Vara Criminal do Fórum da Comarca de Campo Verde, sob a presidência da MM. ${form.cargoMagistrado}, ${form.magistrado}, nos termos do Provimento TJMT/CM n.º 11, de 21 de maio de 2024, da decisão proferida na Medida Cautelar na ADPF n.º 347, do Supremo Tribunal Federal, bem como do Ofício-Circular n.º 7/2025, da Corregedoria-Geral da Justiça do Estado de Mato Grosso, e com fundamento no artigo 5º, incisos XXXV e LXII, da Constituição da República Federativa do Brasil de 1988; no artigo 7º, item 5, da Convenção Americana sobre Direitos Humanos (Pacto de San José da Costa Rica), promulgada por meio do Decreto Presidencial n.º 678, de 06 de novembro de 1992 e art. 9°, 3, do Pacto Internacional sobre Direitos Civis e Políticos de Nova Iorque, a MM ${form.cargoMagistrado} declarou aberta a presente AUDIÊNCIA DE CUSTÓDIA, com a apresentação do(a) Indiciado(a) que teve a prévia oportunidade de entrevista reservada com a Defesa Técnica.`];
+  const deliLines=(form.deliberacoesTexto||'[Deliberações não geradas]').split('\n').filter(l=>l.trim());
+
+  let body='';
+  body+=pairTbl([['','ESTADO DE MATO GROSSO  |  PODER JUDICIÁRIO  |  Comarca de Campo Verde – 3ª Vara Criminal']]);
+  body+=para(tr(termTitle,{bold:true}),{align:'center'});
+  body+=para(tr(form.numProcesso||'[NÚMERO]',{bold:true}),{align:'center'});
+  body+=pairTbl([['Autuado/Reeducando:',form.nomeAutuado||'—'],['Presentes:',`${form.magistrado}, ${form.cargoMagistrado} | ${form.promotor}, Ministério Público | ${form.defensor}, ${form.cargoDefensor}`]]);
+  aberturas.forEach(p=>{body+=para(tr(p));});
+  body+=para(tr('Em seguida, passou-se à análise do evento e à qualificação do(a) indiciado(a), conforme os campos previstos no Formulário do Banco Nacional de Medidas Penais e Prisões (BNMP).'));
+  body+=secTbl('DADOS DA AUDIÊNCIA',[['Número Auto/Mandado:',auto],['Audiência realizada após o prazo de 24 horas:',form.apos24h],['Motivo:',form.apos24h==='Sim'?form.motivo24h:'Inaplicável'],['Audiência realizada na modalidade presencial:',form.presencial],['Motivo:',form.presencial==='Não'?form.motivoPresencial:'Inaplicável'],['Entrevista prévia por equipe multidisciplinar:',form.equipeMulti],['Há indícios de transtorno mental/deficiência:',form.transtorno]]);
+  body+=secTbl('DADOS DA PESSOA',[['Nome:',form.nomeAutuado||'—'],['Filiação:',filiacao],['Data de Nascimento:',dnStr],['Endereço:',form.endereco||'—'],['Celular:',form.celular||'—'],['Documento:',docStr],['Naturalidade:',form.naturalidade||'—'],['Autodeclaração de cor ou raça:',form.corRaca],['Sexo:',form.sexo],['Autodeclaração da Identidade de Gênero:',form.identidadeGenero],['Autodeclaração da Orientação Sexual:',form.orientacaoSexual],['Nacionalidade:',form.nacionalidade],['Idioma falado:',form.idioma],['Grau de conhecimento da Língua Portuguesa:',form.grauPortugues],['Precisa de tradutor:',form.precisaTradutor],['Possui irmão gêmeo:',form.irmaoGemeo]]);
+  body+=secTbl('INFORMAÇÕES SOCIAIS E DE SAÚDE',[['Possui doença grave/crônica:',form.doencaGrave==='Sim'?'Sim: '+form.qualDoenca:'Não'],['Uso abusivo de drogas lícitas ou ilícitas:',form.usoDrogas],['Nível de escolaridade:',form.escolaridade],['Está estudando:',form.estudando],['Situação econômica:',form.situacaoEconomica],['Situação de moradia:',form.situacaoMoradia]]);
+  body+=secTbl('FILHOS E DEPENDENTES',[['Possui dependentes:',form.possuiDependentes],['Nomes e Idades:',form.possuiDependentes==='Sim'?form.nomesIdadesDepend:'Prejudicado.']]);
+  body+=secTbl('INFORMAÇÕES PROCESSUAIS SOBRE O ATENDIMENTO JUDICIÁRIO',[['Houve apreensão de arma de fogo:',form.armaFogo==='Sim'?'Sim: '+form.detalhesArma:'Não'],['Houve apreensão de drogas:',form.drogasApreen==='Sim'?'Sim: '+form.detalhesDrogas:'Não'],['Houve relato/indício de tortura/maus-tratos:',form.tortura],['Exame de corpo de delito posterior:',form.exameCorpo],['Antecedentes:',form.antecedentes==='Sim'?'Sim: '+form.detalhesAntecedentes:'Não']]);
+  body+=para(tr(gravacao));
+  body+=para(tr('DELIBERAÇÕES',{bold:true,underline:true}),{align:'center'});
+  deliLines.forEach(line=>{body+=para(parseRuns(line));});
+  body+=para(tr('Nada mais havendo a consignar, foi lavrado o presente termo, cuja presença das partes está atestada pela gravação audiovisual.',{bold:true}));
+  if(isEx){body+=para(tr(form.magistrado,{bold:true}),{align:'center'});body+=para(tr('Juíza de Direito'),{align:'center'});}
+  body+=para(tr('Praça dos Três Poderes, n. 01 – Jardim Campo Real – CEP 78.840-000 – Campo Verde/MT – Fone: (66) 3419-2233'),{align:'center'});
+
+  const sectPr=`<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="${PG_TOP}" w:right="${PG_RIGHT}" w:bottom="${PG_BOT}" w:left="${PG_LEFT}" w:header="${PG_HDR}" w:footer="${PG_FTR}" w:gutter="0"/></w:sectPr>`;
+  const NS='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  return makeDocx([
+    {name:'[Content_Types].xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>'},
+    {name:'_rels/.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'},
+    {name:'word/_rels/document.xml.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>'},
+    {name:'word/settings.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings ${NS}><w:defaultTabStop w:val="720"/></w:settings>`},
+    {name:'word/styles.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles ${NS}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${G}" w:hAnsi="${G}" w:cs="${G}"/><w:sz w:val="${SZ}"/><w:szCs w:val="${SZ}"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:jc w:val="both"/><w:spacing w:before="0" w:after="${AFT}" w:line="${LINE}" w:lineRule="exact"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`},
+    {name:'word/document.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${NS}><w:body>${body}${sectPr}</w:body></w:document>`},
+  ]);
 }
 
 // ── Print / PDF ──────────────────────────────────────────────
@@ -188,8 +290,14 @@ function injetarCSS() {
       .print-hide { display: none !important; }
       .print-doc  { display: block !important; }
       html, body   { background: white !important; margin: 0; padding: 0; }
-      @page { size: A4 portrait; margin: 0; }
-      #doc-print-wrap { padding: 3cm 2cm 2cm 3cm; }
+      @page {
+        size: 21cm 29.7cm portrait;
+        margin-top: 3.95cm;
+        margin-right: 2cm;
+        margin-bottom: 0.75cm;
+        margin-left: 3cm;
+      }
+      #doc-print-wrap { padding: 0; margin: 0; }
     }
     @media screen { .print-doc { display: none; } }
   `;
@@ -197,7 +305,7 @@ function injetarCSS() {
 }
 
 // ── estilos do preview (formatação exata: Garamond 13pt / 18pt / 12pt) ──────
-const DS = { fontFamily: "'EB Garamond','Garamond','Times New Roman',serif", fontSize: "13pt", lineHeight: "18pt", color: "#000", backgroundColor: "#fff", padding: "3cm 2cm 2cm 3cm", maxWidth: "21cm", margin: "0 auto" };
+const DS = { fontFamily: "'EB Garamond','Garamond','Times New Roman',serif", fontSize: "13pt", lineHeight: "18pt", color: "#000", backgroundColor: "#fff", padding: "3.95cm 2cm 0.75cm 3cm", maxWidth: "21cm", margin: "0 auto" };
 const PS = { margin: "0 0 12pt 0", textAlign: "justify", fontSize: "13pt", lineHeight: "18pt" };
 const TS = { width: "100%", borderCollapse: "collapse", border: "1px solid #666", marginBottom: "12pt" };
 const TH = { background: "#e8e8e8", padding: "3px 8px", fontWeight: "bold", textAlign: "center", fontSize: "13pt", lineHeight: "18pt", border: "1px solid #666" };
@@ -409,6 +517,9 @@ export default function App() {
 
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
+  const [docxUrl, setDocxUrl] = useState('');
+  const [docxName, setDocxName] = useState('');
+  const [loadingDocx, setLoadingDocx] = useState(false);
 
   const set = useCallback((k, v) => setF(p => ({ ...p, [k]: v })), []);
   const tipo = TIPOS.find(t => t.v === f.tipo);
@@ -434,10 +545,48 @@ export default function App() {
 
   const imprimir = () => { window.print(); };
 
-  const copyText = () => {
+  const copiarComFormatacao = async () => {
     const el = document.getElementById("doc-preview");
     if (!el) return;
-    navigator.clipboard.writeText(el.innerText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); });
+    const html = '<html><head><meta charset="utf-8"></head><body>' + el.outerHTML + '</body></html>';
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([el.innerText], { type: 'text/plain' }),
+        })
+      ]);
+    } catch {
+      // fallback: selecionar e copiar via execCommand
+      try {
+        const range = document.createRange();
+        range.selectNode(el);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+      } catch(e2) { setErr('Não foi possível copiar: ' + e2.message); return; }
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const prepararDocx = async () => {
+    setLoadingDocx(true); setErr(''); setDocxUrl('');
+    try {
+      const blob = buildDocxBlob(f);
+      // FileReader converte Blob → data URL (base64) sem precisar de URL.createObjectURL
+      const dataUrl = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result);
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+      setDocxUrl(dataUrl);
+      const nome = (f.nomeAutuado || 'audiencia').replace(/\s+/g, '_').substring(0, 40);
+      setDocxName('Termo_' + nome + '.docx');
+    } catch(e) { setErr('Erro ao gerar DOCX: ' + e.message); }
+    finally { setLoadingDocx(false); }
   };
 
   const stepContent = () => {
@@ -683,12 +832,24 @@ export default function App() {
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <h2 className="text-lg font-semibold text-slate-800">Documento Final</h2>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={copyText} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${copied ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
-              {copied ? "✓ Copiado" : "⎘ Copiar texto"}
+            <button onClick={copiarComFormatacao}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${copied ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+              {copied ? "✓ Copiado com formatação!" : "⎘ Copiar com formatação"}
             </button>
+            {!docxUrl
+              ? <button onClick={prepararDocx} disabled={loadingDocx}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50">
+                  {loadingDocx ? "⟳ Gerando..." : "📄 Gerar DOCX"}
+                </button>
+              : <a href={docxUrl} download={docxName}
+                  onClick={() => setTimeout(() => setDocxUrl(''), 3000)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500 cursor-pointer no-underline">
+                  ⬇ Clique aqui para baixar o .docx
+                </a>
+            }
             <button onClick={imprimir}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400">
-              🖨 Imprimir / Salvar PDF
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-slate-200 text-slate-700 hover:bg-slate-300">
+              🖨 PDF
             </button>
           </div>
         </div>
@@ -697,7 +858,10 @@ export default function App() {
           <DocPreview f={f} />
         </div>
         <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs text-blue-700"><strong>Dica:</strong> Clique em <strong>Imprimir / Salvar PDF</strong> e selecione <em>Salvar como PDF</em> no diálogo de impressão. O documento sairá com Garamond 13pt · Espaçamento 18pt exato · 12pt após parágrafo · Justificado · Margens A4.</p>
+          <p className="text-xs text-blue-700">
+            <strong>DOCX:</strong> Garamond 13pt · 18pt exato · 12pt após · Justificado · Margens: Superior 3,95cm · Inferior 0,75cm · Esquerda 3cm · Direita 2cm &nbsp;|&nbsp;
+            <strong>Copiar com formatação:</strong> cole diretamente no Word (Ctrl+V) — tabelas, negrito e sublinhado são preservados.
+          </p>
         </div>
       </div>
     );
