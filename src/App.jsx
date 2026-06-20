@@ -769,9 +769,27 @@ export default function App() {
   const stepContent = () => {
     if (step === 0) return (
       <div>
-        <h2 className="text-lg font-semibold text-slate-800 mb-1">Tipo de Audiência</h2>
-        <p className="text-sm text-slate-500 mb-6">Selecione o tipo de audiência para gerar a minuta correta.</p>
-        <div className="grid grid-cols-1 gap-4">
+        <h2 className="text-lg font-semibold text-slate-800 mb-1">Início Rápido</h2>
+        <p className="text-sm text-slate-500 mb-4">Importe o processo (PDF) e a IA preenche tudo automaticamente. Depois selecione o tipo e clique <strong>Gerar agora</strong>.</p>
+
+        {/* PDF import panel – duplicado aqui para o fluxo rápido */}
+        <div className="mb-5 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="text-sm font-semibold text-amber-800">Importar processo (PDF) e preencher automaticamente</h3>
+              <p className="text-xs text-amber-700 mt-0.5">Envie o PDF do auto/BOC/processo. A IA lê o documento e preenche os campos de uma vez.</p>
+            </div>
+            <label htmlFor="pdf-upload-input-step0" style={{opacity: importando ? 0.5 : 1, cursor: importando ? 'not-allowed' : 'pointer'}}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50 flex-shrink-0">
+              {importando ? "⟳ Lendo o processo..." : "📎 Selecionar PDF"}
+            </label>
+            <input id="pdf-upload-input-step0" type="file" accept=".pdf,.PDF,application/pdf,application/x-pdf,application/octet-stream" onChange={onImportFile} disabled={importando} className="hidden" />
+          </div>
+          {importInfo && <p className="mt-3 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">{importInfo}</p>}
+        </div>
+
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">Tipo de Audiência</h3>
+        <div className="grid grid-cols-1 gap-3 mb-5">
           {TIPOS.map(t => (
             <button key={t.v} onClick={() => set("tipo", t.v)}
               className={`p-5 rounded-xl border-2 text-left transition-all ${f.tipo === t.v ? "border-amber-500 bg-amber-50" : "border-slate-200 bg-white hover:border-amber-300"}`}>
@@ -785,6 +803,22 @@ export default function App() {
             </button>
           ))}
         </div>
+
+        {f.tipo && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-800 font-medium mb-3">Defina data e hora da audiência (opcional) e gere direto:</p>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <Inp label="Data da Audiência" val={f.dataAudiencia} onChange={v => set("dataAudiencia", v)} type="date" />
+              <Inp label="Hora da Audiência" val={f.horaAudiencia} onChange={v => set("horaAudiencia", v)} type="time" />
+            </div>
+            <button onClick={() => setStep(6)} disabled={!f.tipo}
+              className="w-full py-2.5 text-sm font-semibold bg-amber-500 text-slate-900 rounded-lg hover:bg-amber-400 disabled:opacity-50">
+              ✦ Gerar agora (pular para Deliberações) →
+            </button>
+          </div>
+        )}
+
+        {err && <p className="mt-3 text-sm text-red-600 bg-red-50 p-3 rounded-lg">{err}</p>}
       </div>
     );
 
