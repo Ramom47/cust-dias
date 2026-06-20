@@ -1,4 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 // ── Cliente da API (funciona no artefato do Claude E no app Node) ──────────────
 // Tenta o proxy /api/messages (app Node); se ele não existir (artefato), cai
@@ -100,17 +104,55 @@ function fileParaBase64(file) {
     r.readAsDataURL(file);
   });
 }
+const IMPORT_MAX_CHARS = 90000;
+async function extrairTextoPdf(file) {
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  let texto = "";
+  for (let p = 1; p <= doc.numPages && texto.length < IMPORT_MAX_CHARS; p++) {
+    const page = await doc.getPage(p);
+    const tc = await page.getTextContent();
+    let last = null, linha = "";
+    const linhas = [];
+    for (const it of tc.items) {
+      const y = it.transform[5];
+      if (last !== null && Math.abs(y - last) > 3) { linhas.push(linha); linha = ""; }
+      linha += it.str + (it.hasEOL ? "" : " ");
+      last = y;
+    }
+    if (linha) linhas.push(linha);
+    texto += `\n\n===== PÁGINA ${p} =====\n` + linhas.join("\n");
+  }
+  return texto.slice(0, IMPORT_MAX_CHARS).replace(/[ \t]+/g, " ");
+}
 async function importarProcessoPdf(file) {
   if (file.type && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"))
     throw new Error("Selecione um arquivo PDF.");
   if (file.size > 20 * 1024 * 1024) throw new Error("PDF muito grande (acima de ~20 MB). Reduza às páginas relevantes.");
-  const base64 = await fileParaBase64(file);
-  const d = await enviarMensagens({
-    model: "claude-sonnet-4-6", max_tokens: 2000, system: IMPORT_SYS,
-    messages: [{ role: "user", content: [
+
+  // 1) Extrai o texto no navegador → payload pequeno (cabe nos limites da Vercel).
+  let texto = "";
+  try { texto = await extrairTextoPdf(file); } catch { texto = ""; }
+  const temTexto = texto.replace(/[^a-zA-ZÀ-ÿ]/g, "").length >= 50;
+
+  let content;
+  if (temTexto) {
+    content = importInstrucoes() + "\n\nTEXTO DO PROCESSO:\n" + texto;
+  } else {
+    // 2) PDF digitalizado (sem texto): manda o arquivo como documento (OCR/visão),
+    //    apenas se for pequeno o bastante para o limite de corpo da Vercel (~4,5 MB).
+    if (file.size > 3 * 1024 * 1024)
+      throw new Error("PDF digitalizado (sem texto selecionável) e grande demais para leitura automática. Use um PDF com texto ou reduza às páginas relevantes.");
+    const base64 = await fileParaBase64(file);
+    content = [
       { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
       { type: "text", text: importInstrucoes() },
-    ] }],
+    ];
+  }
+
+  const d = await enviarMensagens({
+    model: "claude-sonnet-4-6", max_tokens: 2000, system: IMPORT_SYS,
+    messages: [{ role: "user", content }],
   });
   return importSanitizar(importParseJson(textoDaResposta(d)));
 }
