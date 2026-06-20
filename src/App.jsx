@@ -1,5 +1,119 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { enviarMensagens, textoDaResposta } from "./anthropic.js";
+
+// ── Cliente da API (funciona no artefato do Claude E no app Node) ──────────────
+// Tenta o proxy /api/messages (app Node); se ele não existir (artefato), cai
+// automaticamente para a chamada direta, autenticada pelo sandbox do artefato.
+const PROXY_URL = "/api/messages";
+const DIRECT_URL = "https://api.anthropic.com/v1/messages";
+const SEM_PROXY = "__SEM_PROXY__";
+
+async function viaProxy(body) {
+  let r;
+  try {
+    r = await fetch(PROXY_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch { throw new Error(SEM_PROXY); }
+  if (r.status === 404) throw new Error(SEM_PROXY);
+  const txt = await r.text();
+  let d;
+  try { d = JSON.parse(txt); } catch { throw new Error(SEM_PROXY); }
+  if (d && d.error) throw new Error(d.error.message || "Erro na API.");
+  if (!r.ok) throw new Error(`Erro HTTP ${r.status}.`);
+  return d;
+}
+async function viaDireto(body) {
+  const r = await fetch(DIRECT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let d;
+  try { d = await r.json(); } catch { throw new Error(`Resposta inválida da API (HTTP ${r.status}).`); }
+  if (d && d.error) throw new Error(d.error.message || "Erro na API.");
+  if (!r.ok) throw new Error(`Erro HTTP ${r.status}.`);
+  return d;
+}
+async function enviarMensagens(body) {
+  try { return await viaProxy(body); }
+  catch (e) { if (e && e.message === SEM_PROXY) return await viaDireto(body); throw e; }
+}
+function textoDaResposta(d) {
+  if (!d || !Array.isArray(d.content)) throw new Error("Resposta sem conteúdo de texto.");
+  return d.content.map(b => b.text || "").join("");
+}
+
+// ── Importação de processo em PDF (sem dependências: o PDF vai como documento) ──
+const IMPORT_ENUMS = {
+  tipo: ["LIBERDADE", "PREVENTIVA", "EXECUTIVO"],
+  corRaca: ["Branca", "Parda", "Preta", "Amarela", "Indígena"],
+  sexo: ["Masculino", "Feminino", "Outro"],
+  drogasApreen: ["Sim", "Não"], armaFogo: ["Sim", "Não"],
+  tortura: ["Sim", "Não"], antecedentes: ["Sim", "Não"],
+};
+const IMPORT_TEXT_KEYS = [
+  "numProcesso", "numAutoMandado", "nomeAutuado", "filiacaoPai", "filiacaoMae",
+  "dataNasc", "endereco", "celular", "cpf", "rg", "naturalidade", "nacionalidade",
+  "idioma", "crimeImputado", "detalhesDrogas", "detalhesArma", "detalhesAntecedentes", "narrativaP",
+];
+const IMPORT_SYS =
+  "Você é um assistente jurídico que extrai dados de autos de prisão em flagrante, boletins de " +
+  "ocorrência e processos criminais para preencher o termo de uma audiência de custódia da 3ª Vara " +
+  "Criminal de Campo Verde/MT. Responda APENAS com um objeto JSON válido (sem markdown, sem cercas de " +
+  "código, sem comentários). Inclua somente os campos que localizar com segurança; OMITA os demais. " +
+  "Nunca invente dados. Não preencha datas/horas da audiência (não constam do processo).";
+function importInstrucoes() {
+  return [
+    "Extraia os dados do processo (texto e imagens) e devolva um JSON com as chaves (todas opcionais):",
+    "- numProcesso: número CNJ (ex.: 0000000-00.0000.8.11.0000)",
+    "- numAutoMandado: número do auto/BOC/APF",
+    "- nomeAutuado: nome completo, em MAIÚSCULAS",
+    "- filiacaoPai, filiacaoMae: nomes dos pais (representante legal costuma ser a mãe)",
+    "- dataNasc: data de nascimento no formato AAAA-MM-DD",
+    "- endereco, celular, cpf, rg",
+    "- naturalidade: cidade/UF de nascimento; nacionalidade; idioma",
+    `- corRaca: um de ${IMPORT_ENUMS.corRaca.join(", ")}`,
+    `- sexo: um de ${IMPORT_ENUMS.sexo.join(", ")}`,
+    "- crimeImputado: artigo e lei (ex.: \"art. 33 da Lei n.º 11.343/2006\")",
+    "- drogasApreen: \"Sim\"/\"Não\"; detalhesDrogas: tipo e quantidade",
+    "- armaFogo: \"Sim\"/\"Não\"; detalhesArma: descrição",
+    "- antecedentes: \"Sim\"/\"Não\"; detalhesAntecedentes: resumo",
+    "- tortura: \"Sim\"/\"Não\" (relato/indício de tortura ou maus-tratos)",
+    "- narrativaP: resumo objetivo dos fatos concretos (1 a 3 parágrafos)",
+    "- tipo: \"LIBERDADE\", \"PREVENTIVA\" ou \"EXECUTIVO\" — apenas se ficar claro; senão, omita",
+  ].join("\n");
+}
+function importParseJson(txt) {
+  let s = String(txt).trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  const i = s.indexOf("{"), j = s.lastIndexOf("}");
+  if (i === -1 || j === -1) throw new Error("A IA não retornou um JSON reconhecível.");
+  return JSON.parse(s.slice(i, j + 1));
+}
+function importSanitizar(obj) {
+  const out = {};
+  for (const k of IMPORT_TEXT_KEYS) { const v = obj[k]; if (typeof v === "string" && v.trim()) out[k] = v.trim(); }
+  for (const [k, vals] of Object.entries(IMPORT_ENUMS)) { const v = obj[k]; if (typeof v === "string" && vals.includes(v.trim())) out[k] = v.trim(); }
+  if (out.dataNasc && /^\d{2}\/\d{2}\/\d{4}$/.test(out.dataNasc)) { const [d, m, y] = out.dataNasc.split("/"); out.dataNasc = `${y}-${m}-${d}`; }
+  if (out.detalhesDrogas) out.drogasApreen = out.drogasApreen || "Sim";
+  if (out.detalhesArma) out.armaFogo = out.armaFogo || "Sim";
+  return out;
+}
+function fileParaBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => { const s = String(r.result); res(s.slice(s.indexOf(",") + 1)); };
+    r.onerror = () => rej(new Error("Falha ao ler o arquivo."));
+    r.readAsDataURL(file);
+  });
+}
+async function importarProcessoPdf(file) {
+  if (file.type && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"))
+    throw new Error("Selecione um arquivo PDF.");
+  if (file.size > 20 * 1024 * 1024) throw new Error("PDF muito grande (acima de ~20 MB). Reduza às páginas relevantes.");
+  const base64 = await fileParaBase64(file);
+  const d = await enviarMensagens({
+    model: "claude-sonnet-4-6", max_tokens: 2000, system: IMPORT_SYS,
+    messages: [{ role: "user", content: [
+      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+      { type: "text", text: importInstrucoes() },
+    ] }],
+  });
+  return importSanitizar(importParseJson(textoDaResposta(d)));
+}
 
 const TIPOS = [
   { v:"LIBERDADE", title:"Liberdade Provisória", sub:"Audiência de Custódia", badge:"bg-emerald-100 text-emerald-800", dot:"bg-emerald-500" },
@@ -523,41 +637,26 @@ export default function App() {
     tortura: "Tortura/maus-tratos", narrativaP: "Narrativa dos fatos", tipo: "Tipo de audiência",
   };
 
-  // Guarda o último arquivo para permitir reprocessar via OCR/visão.
-  const ultimoArquivo = useRef(null);
-
-  const processarArquivo = async (file, opts = {}) => {
+  const onImportFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
     setImportando(true); setErr(""); setImportInfo("");
     try {
-      const { importarProcesso } = await import("./pdfImport.js");
-      const { dados, paginas, metodo } = await importarProcesso(file, opts);
+      const dados = await importarProcessoPdf(file);
       const chaves = Object.keys(dados);
-      const via = metodo === "visao" ? "leitura por imagem (OCR/visão)" : "texto do PDF";
       if (!chaves.length) {
-        setImportInfo(`Nenhum dado pôde ser extraído com segurança (via ${via}).`);
+        setImportInfo("Nenhum dado pôde ser extraído com segurança deste arquivo.");
       } else {
         setF(p => ({ ...p, ...dados }));
         const nomes = chaves.map(k => LABELS_CAMPOS[k] || k);
-        setImportInfo(`✓ ${chaves.length} campo(s) preenchidos via ${via}, de ${paginas} página(s): ${nomes.join(", ")}.`);
+        setImportInfo(`✓ ${chaves.length} campo(s) preenchidos a partir do processo: ${nomes.join(", ")}.`);
       }
     } catch (e2) {
       setErr("Falha na importação: " + e2.message);
     } finally {
       setImportando(false);
     }
-  };
-
-  const onImportFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (fileRef.current) fileRef.current.value = "";
-    if (!file) return;
-    ultimoArquivo.current = file;
-    await processarArquivo(file);
-  };
-
-  const reprocessarComVisao = async () => {
-    if (!ultimoArquivo.current) return;
-    await processarArquivo(ultimoArquivo.current, { forcarVisao: true });
   };
 
   useEffect(() => {
@@ -655,21 +754,15 @@ export default function App() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h3 className="text-sm font-semibold text-amber-800">Importar processo (PDF) e preencher automaticamente</h3>
-              <p className="text-xs text-amber-700 mt-0.5">Envie o PDF do auto/BOC/processo. A IA lê o documento e preenche os campos (nome, filiação, endereço, CPF/RG, crime, fatos etc.). PDFs digitalizados são lidos por OCR/visão automaticamente.</p>
+              <p className="text-xs text-amber-700 mt-0.5">Envie o PDF do auto/BOC/processo. A IA lê o documento (texto e imagens) e preenche os campos: nome, filiação, endereço, CPF/RG, crime, fatos etc.</p>
             </div>
             <label htmlFor="pdf-upload-input" style={{opacity: importando ? 0.5 : 1, cursor: importando ? 'not-allowed' : 'pointer'}}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50 flex-shrink-0">
               {importando ? "⟳ Lendo o processo..." : "📎 Selecionar PDF"}
             </label>
-            <input ref={fileRef} id="pdf-upload-input" type="file" accept=".pdf,.PDF,application/pdf,application/x-pdf,application/octet-stream" onChange={onImportFile} className="hidden" />
+            <input ref={fileRef} id="pdf-upload-input" type="file" accept=".pdf,.PDF,application/pdf,application/x-pdf,application/octet-stream" onChange={onImportFile} disabled={importando} className="hidden" />
           </div>
           {importInfo && <p className="mt-3 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">{importInfo}</p>}
-          {ultimoArquivo.current && !importando && (
-            <button onClick={reprocessarComVisao}
-              className="mt-2 text-xs text-amber-700 underline hover:text-amber-900">
-              Resultado incompleto? Reprocessar com OCR/visão (lê as páginas como imagem)
-            </button>
-          )}
         </div>
 
         <Card title="Processo">

@@ -58,28 +58,24 @@ Acesse http://localhost:8787.
 Na etapa **Cabeçalho** há o painel **"Importar processo (PDF) e preencher
 automaticamente"**. Ao selecionar o PDF do auto de prisão / BOC / processo:
 
-1. o texto é extraído **no navegador** com `pdfjs`;
-2. **se houver texto** (PDFs do PJe normalmente têm), ele é enviado ao Claude
-   (via o proxy `/api/messages`), que devolve um JSON estruturado — caminho mais
-   barato e rápido;
-3. **se for um PDF digitalizado** (sem texto), o sistema cai automaticamente
-   para o modo **OCR/visão**: o PDF é enviado como documento ao Claude, que lê as
-   páginas como imagem e extrai os dados;
-4. apenas campos reconhecidos e válidos são mesclados ao formulário — o que não
+1. o PDF é lido no navegador e enviado ao Claude como **documento** (sem
+   bibliotecas externas) — a própria API processa **texto e imagens**, então
+   funciona tanto com PDFs do PJe quanto com digitalizados;
+2. o Claude devolve um JSON estruturado com os dados encontrados;
+3. apenas campos reconhecidos e válidos são mesclados ao formulário — o que não
    for localizado fica em branco e a IA é instruída a **não inventar** dados.
 
-Se o resultado vier incompleto num PDF com texto ruim/corrompido, há o link
-**"Reprocessar com OCR/visão"** para forçar a leitura por imagem. Limites do modo
-visão: até 100 páginas e ~20 MB por arquivo (teto da API).
-
-Campos preenchidos automaticamente quando presentes: número do processo,
-auto/mandado, nome, filiação, data de nascimento, endereço, celular, CPF, RG,
-naturalidade, crime imputado, drogas/arma apreendidas, antecedentes e um resumo
-dos fatos. Sempre revise o resultado antes de gerar o documento.
+Limite: ~20 MB por arquivo (teto da API). Campos preenchidos quando presentes:
+número do processo, auto/mandado, nome, filiação, data de nascimento, endereço,
+celular, CPF, RG, naturalidade, crime imputado, drogas/arma apreendidas,
+antecedentes e um resumo dos fatos. Sempre revise antes de gerar o documento.
 
 > Requer `ANTHROPIC_API_KEY` configurada (mesma usada na geração das
-> deliberações). PDFs digitalizados (somente imagem, sem texto) não são
-> suportados nesta extração.
+> deliberações).
+
+> **Arquivo único / artefato:** `src/App.jsx` é autossuficiente (importa apenas
+> de `react`). Pode ser usado diretamente como artefato do Claude — nesse caso a
+> chamada à API é autenticada pelo próprio sandbox, sem precisar do proxy.
 
 ## Observações
 
