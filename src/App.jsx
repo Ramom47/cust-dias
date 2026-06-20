@@ -539,27 +539,41 @@ export default function App() {
     tortura: "Tortura/maus-tratos", narrativaP: "Narrativa dos fatos", tipo: "Tipo de audiência",
   };
 
-  const onImportFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (fileRef.current) fileRef.current.value = "";
-    if (!file) return;
+  // Guarda o último arquivo para permitir reprocessar via OCR/visão.
+  const ultimoArquivo = useRef(null);
+
+  const processarArquivo = async (file, opts = {}) => {
     setImportando(true); setErr(""); setImportInfo("");
     try {
       const { importarProcesso } = await import("./pdfImport.js");
-      const { dados, paginas } = await importarProcesso(file);
+      const { dados, paginas, metodo } = await importarProcesso(file, opts);
       const chaves = Object.keys(dados);
+      const via = metodo === "visao" ? "leitura por imagem (OCR/visão)" : "texto do PDF";
       if (!chaves.length) {
-        setImportInfo("Nenhum dado pôde ser extraído com segurança deste arquivo.");
+        setImportInfo(`Nenhum dado pôde ser extraído com segurança (via ${via}).`);
       } else {
         setF(p => ({ ...p, ...dados }));
         const nomes = chaves.map(k => LABELS_CAMPOS[k] || k);
-        setImportInfo(`✓ ${chaves.length} campo(s) preenchidos a partir de ${paginas} página(s): ${nomes.join(", ")}.`);
+        setImportInfo(`✓ ${chaves.length} campo(s) preenchidos via ${via}, de ${paginas} página(s): ${nomes.join(", ")}.`);
       }
     } catch (e2) {
       setErr("Falha na importação: " + e2.message);
     } finally {
       setImportando(false);
     }
+  };
+
+  const onImportFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
+    ultimoArquivo.current = file;
+    await processarArquivo(file);
+  };
+
+  const reprocessarComVisao = async () => {
+    if (!ultimoArquivo.current) return;
+    await processarArquivo(ultimoArquivo.current, { forcarVisao: true });
   };
 
   useEffect(() => {
@@ -657,7 +671,7 @@ export default function App() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h3 className="text-sm font-semibold text-amber-800">Importar processo (PDF) e preencher automaticamente</h3>
-              <p className="text-xs text-amber-700 mt-0.5">Envie o PDF do auto/BOC/processo. A IA lê o documento e preenche os campos (nome, filiação, endereço, CPF/RG, crime, fatos etc.).</p>
+              <p className="text-xs text-amber-700 mt-0.5">Envie o PDF do auto/BOC/processo. A IA lê o documento e preenche os campos (nome, filiação, endereço, CPF/RG, crime, fatos etc.). PDFs digitalizados são lidos por OCR/visão automaticamente.</p>
             </div>
             <button onClick={() => fileRef.current && fileRef.current.click()} disabled={importando}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50 flex-shrink-0">
@@ -666,6 +680,12 @@ export default function App() {
             <input ref={fileRef} type="file" accept="application/pdf,.pdf" onChange={onImportFile} className="hidden" />
           </div>
           {importInfo && <p className="mt-3 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">{importInfo}</p>}
+          {ultimoArquivo.current && !importando && (
+            <button onClick={reprocessarComVisao}
+              className="mt-2 text-xs text-amber-700 underline hover:text-amber-900">
+              Resultado incompleto? Reprocessar com OCR/visão (lê as páginas como imagem)
+            </button>
+          )}
         </div>
 
         <Card title="Processo">

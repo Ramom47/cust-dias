@@ -58,12 +58,19 @@ Acesse http://localhost:8787.
 Na etapa **Cabeçalho** há o painel **"Importar processo (PDF) e preencher
 automaticamente"**. Ao selecionar o PDF do auto de prisão / BOC / processo:
 
-1. o texto é extraído **no navegador** com `pdfjs` (o arquivo não é enviado a
-   lugar nenhum além do passo seguinte);
-2. o texto é enviado ao Claude (via o mesmo proxy `/api/messages`), que devolve
-   um JSON estruturado com os dados encontrados;
-3. apenas campos reconhecidos e válidos são mesclados ao formulário — o que não
+1. o texto é extraído **no navegador** com `pdfjs`;
+2. **se houver texto** (PDFs do PJe normalmente têm), ele é enviado ao Claude
+   (via o proxy `/api/messages`), que devolve um JSON estruturado — caminho mais
+   barato e rápido;
+3. **se for um PDF digitalizado** (sem texto), o sistema cai automaticamente
+   para o modo **OCR/visão**: o PDF é enviado como documento ao Claude, que lê as
+   páginas como imagem e extrai os dados;
+4. apenas campos reconhecidos e válidos são mesclados ao formulário — o que não
    for localizado fica em branco e a IA é instruída a **não inventar** dados.
+
+Se o resultado vier incompleto num PDF com texto ruim/corrompido, há o link
+**"Reprocessar com OCR/visão"** para forçar a leitura por imagem. Limites do modo
+visão: até 100 páginas e ~20 MB por arquivo (teto da API).
 
 Campos preenchidos automaticamente quando presentes: número do processo,
 auto/mandado, nome, filiação, data de nascimento, endereço, celular, CPF, RG,
