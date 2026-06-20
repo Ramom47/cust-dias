@@ -657,11 +657,11 @@ export default function App() {
               <h3 className="text-sm font-semibold text-amber-800">Importar processo (PDF) e preencher automaticamente</h3>
               <p className="text-xs text-amber-700 mt-0.5">Envie o PDF do auto/BOC/processo. A IA lê o documento e preenche os campos (nome, filiação, endereço, CPF/RG, crime, fatos etc.). PDFs digitalizados são lidos por OCR/visão automaticamente.</p>
             </div>
-            <button onClick={() => fileRef.current && fileRef.current.click()} disabled={importando}
+            <label htmlFor="pdf-upload-input" style={{opacity: importando ? 0.5 : 1, cursor: importando ? 'not-allowed' : 'pointer'}}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50 flex-shrink-0">
               {importando ? "⟳ Lendo o processo..." : "📎 Selecionar PDF"}
-            </button>
-            <input ref={fileRef} type="file" accept="application/pdf,.pdf" onChange={onImportFile} className="hidden" />
+            </label>
+            <input ref={fileRef} id="pdf-upload-input" type="file" accept="application/pdf,.pdf" onChange={onImportFile} className="hidden" />
           </div>
           {importInfo && <p className="mt-3 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">{importInfo}</p>}
           {ultimoArquivo.current && !importando && (
