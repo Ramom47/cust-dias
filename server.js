@@ -28,7 +28,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 const app = express();
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "10mb" }));
 
 app.post("/api/messages", async (req, res) => {
   if (!ANTHROPIC_API_KEY) {

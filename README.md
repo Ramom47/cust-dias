@@ -53,6 +53,27 @@ npm start          # serve dist/ + proxy na mesma porta (8787)
 
 Acesse http://localhost:8787.
 
+## Importar processo em PDF (preenchimento automático)
+
+Na etapa **Cabeçalho** há o painel **"Importar processo (PDF) e preencher
+automaticamente"**. Ao selecionar o PDF do auto de prisão / BOC / processo:
+
+1. o texto é extraído **no navegador** com `pdfjs` (o arquivo não é enviado a
+   lugar nenhum além do passo seguinte);
+2. o texto é enviado ao Claude (via o mesmo proxy `/api/messages`), que devolve
+   um JSON estruturado com os dados encontrados;
+3. apenas campos reconhecidos e válidos são mesclados ao formulário — o que não
+   for localizado fica em branco e a IA é instruída a **não inventar** dados.
+
+Campos preenchidos automaticamente quando presentes: número do processo,
+auto/mandado, nome, filiação, data de nascimento, endereço, celular, CPF, RG,
+naturalidade, crime imputado, drogas/arma apreendidas, antecedentes e um resumo
+dos fatos. Sempre revise o resultado antes de gerar o documento.
+
+> Requer `ANTHROPIC_API_KEY` configurada (mesma usada na geração das
+> deliberações). PDFs digitalizados (somente imagem, sem texto) não são
+> suportados nesta extração.
+
 ## Observações
 
 - A geração de deliberações usa o modelo `claude-sonnet-4-6`.

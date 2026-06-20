@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 // Chama o proxy local (server.js), que adiciona a chave da API e o cabeçalho
 // anthropic-version no servidor. A chave nunca é exposta ao navegador.
@@ -520,9 +520,47 @@ export default function App() {
   const [docxUrl, setDocxUrl] = useState('');
   const [docxName, setDocxName] = useState('');
   const [loadingDocx, setLoadingDocx] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [importInfo, setImportInfo] = useState("");
+  const fileRef = useRef(null);
 
   const set = useCallback((k, v) => setF(p => ({ ...p, [k]: v })), []);
   const tipo = TIPOS.find(t => t.v === f.tipo);
+
+  const LABELS_CAMPOS = {
+    numProcesso: "Número do processo", numAutoMandado: "Auto/Mandado",
+    nomeAutuado: "Nome", filiacaoPai: "Filiação (pai)", filiacaoMae: "Filiação (mãe)",
+    dataNasc: "Data de nascimento", endereco: "Endereço", celular: "Celular",
+    cpf: "CPF", rg: "RG", naturalidade: "Naturalidade", nacionalidade: "Nacionalidade",
+    idioma: "Idioma", corRaca: "Cor/raça", sexo: "Sexo", crimeImputado: "Crime imputado",
+    drogasApreen: "Apreensão de drogas", detalhesDrogas: "Detalhes das drogas",
+    armaFogo: "Apreensão de arma", detalhesArma: "Detalhes da arma",
+    antecedentes: "Antecedentes", detalhesAntecedentes: "Detalhes dos antecedentes",
+    tortura: "Tortura/maus-tratos", narrativaP: "Narrativa dos fatos", tipo: "Tipo de audiência",
+  };
+
+  const onImportFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
+    setImportando(true); setErr(""); setImportInfo("");
+    try {
+      const { importarProcesso } = await import("./pdfImport.js");
+      const { dados, paginas } = await importarProcesso(file);
+      const chaves = Object.keys(dados);
+      if (!chaves.length) {
+        setImportInfo("Nenhum dado pôde ser extraído com segurança deste arquivo.");
+      } else {
+        setF(p => ({ ...p, ...dados }));
+        const nomes = chaves.map(k => LABELS_CAMPOS[k] || k);
+        setImportInfo(`✓ ${chaves.length} campo(s) preenchidos a partir de ${paginas} página(s): ${nomes.join(", ")}.`);
+      }
+    } catch (e2) {
+      setErr("Falha na importação: " + e2.message);
+    } finally {
+      setImportando(false);
+    }
+  };
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -614,6 +652,22 @@ export default function App() {
     if (step === 1) return (
       <div>
         <h2 className="text-lg font-semibold text-slate-800 mb-4">Cabeçalho do Termo</h2>
+
+        <div className="mb-4 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="text-sm font-semibold text-amber-800">Importar processo (PDF) e preencher automaticamente</h3>
+              <p className="text-xs text-amber-700 mt-0.5">Envie o PDF do auto/BOC/processo. A IA lê o documento e preenche os campos (nome, filiação, endereço, CPF/RG, crime, fatos etc.).</p>
+            </div>
+            <button onClick={() => fileRef.current && fileRef.current.click()} disabled={importando}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50 flex-shrink-0">
+              {importando ? "⟳ Lendo o processo..." : "📎 Selecionar PDF"}
+            </button>
+            <input ref={fileRef} type="file" accept="application/pdf,.pdf" onChange={onImportFile} className="hidden" />
+          </div>
+          {importInfo && <p className="mt-3 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">{importInfo}</p>}
+        </div>
+
         <Card title="Processo">
           <Inp label="Número do Processo" val={f.numProcesso} onChange={v => { set("numProcesso", v); if (!f.numAutoMandado) set("numAutoMandado", v); }} required placeholder="0000000-00.0000.8.11.0000" />
           <Inp label="Nome do Autuado / Reeducando" val={f.nomeAutuado} onChange={v => set("nomeAutuado", v)} required placeholder="NOME COMPLETO EM MAIÚSCULAS" />
