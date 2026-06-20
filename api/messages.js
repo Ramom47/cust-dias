@@ -6,8 +6,6 @@
 // para o navegador, e isso resolve o erro de CORS ("Failed to fetch") que ocorre
 // ao tentar chamar a Anthropic diretamente do site.
 
-export const config = { maxDuration: 60 };
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: { message: "Método não permitido." } });
