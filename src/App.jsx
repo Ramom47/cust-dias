@@ -1,8 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-
-// Chama o proxy local (server.js), que adiciona a chave da API e o cabeçalho
-// anthropic-version no servidor. A chave nunca é exposta ao navegador.
-const API = "/api/messages";
+import { enviarMensagens, textoDaResposta } from "./anthropic.js";
 
 const TIPOS = [
   { v:"LIBERDADE", title:"Liberdade Provisória", sub:"Audiência de Custódia", badge:"bg-emerald-100 text-emerald-800", dot:"bg-emerald-500" },
@@ -159,21 +156,8 @@ async function gerarDeliberacoes(form) {
     ].filter(Boolean).join("\n");
   }
 
-  const r = await fetch(API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 3000, system: sys, messages: [{ role: "user", content: usr }] }),
-  });
-  let d;
-  try {
-    d = await r.json();
-  } catch {
-    throw new Error(`Resposta inválida do servidor (HTTP ${r.status}). Verifique se o servidor proxy (server.js) está em execução.`);
-  }
-  if (d.error) throw new Error(d.error.message || "Erro desconhecido na API.");
-  if (!r.ok) throw new Error(`Erro HTTP ${r.status}.`);
-  if (!Array.isArray(d.content)) throw new Error("Resposta sem conteúdo de texto.");
-  return d.content.map(b => b.text || "").join("");
+  const d = await enviarMensagens({ model: "claude-sonnet-4-6", max_tokens: 3000, system: sys, messages: [{ role: "user", content: usr }] });
+  return textoDaResposta(d);
 }
 
 // ── ZIP / DOCX builder (pure browser JS – sem dependências) ──────────

@@ -1,13 +1,13 @@
 // Importação de processo em PDF → extração de texto (pdfjs, no navegador) →
-// estruturação por IA (Claude, via proxy /api/messages) → objeto pronto para
-// preencher o formulário.
+// estruturação por IA (Claude, via cliente que funciona tanto no app Node
+// quanto no artefato do Claude) → objeto pronto para preencher o formulário.
 
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { enviarMensagens, textoDaResposta } from "./anthropic.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-const API = "/api/messages";
 const MAX_CHARS = 90000; // limite de texto enviado à IA (controla custo/tokens)
 
 // Campos que a IA pode preencher e respectivos valores aceitos (enums).
@@ -132,27 +132,13 @@ function abParaBase64(buf) {
 
 // Envia o conteúdo (texto ou bloco de documento) à IA e devolve o JSON sanitizado.
 async function chamarIA(userContent) {
-  const r = await fetch(API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2000,
-      system: SYS,
-      messages: [{ role: "user", content: userContent }],
-    }),
+  const d = await enviarMensagens({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2000,
+    system: SYS,
+    messages: [{ role: "user", content: userContent }],
   });
-
-  let d;
-  try {
-    d = await r.json();
-  } catch {
-    throw new Error(`Resposta inválida do servidor (HTTP ${r.status}). Verifique se o proxy (server.js) está em execução.`);
-  }
-  if (d.error) throw new Error(d.error.message || "Erro na API.");
-  if (!Array.isArray(d.content)) throw new Error("Resposta sem conteúdo.");
-
-  return sanitizar(parseJson(d.content.map(b => b.text || "").join("")));
+  return sanitizar(parseJson(textoDaResposta(d)));
 }
 
 // Caminho 1 (barato): texto extraído pelo pdfjs vai como prompt de texto.
