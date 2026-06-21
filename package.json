@@ -1,27 +1,21 @@
 {
   "name": "cust-dias",
   "private": true,
-  "version": "3.1.0",
+  "version": "4.0.0",
   "type": "module",
   "description": "Sistema de Audiência de Custódia — 3ª Vara Criminal de Campo Verde/MT",
   "scripts": {
-    "dev": "concurrently -k -n server,vite -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
-    "dev:client": "vite",
-    "dev:server": "node server.js",
+    "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "start": "node server.js"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "concurrently": "^9.1.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "vite": "^5.4.11"

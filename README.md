@@ -1,86 +1,67 @@
 # Sistema de Audiência de Custódia — 3ª Vara Criminal de Campo Verde/MT
 
-Aplicação React para gerar termos de **Audiência de Custódia** (Liberdade
-Provisória, Prisão Preventiva e Executivo de Pena/Justificação), com geração
-do texto das deliberações por IA (Claude) e exportação para PDF via impressão.
+Aplicação React (página única, **100% no navegador**) para gerar termos de
+**Audiência de Custódia**:
 
-## O que foi corrigido
+- **Liberdade Provisória** (4 modelos: padrão, fatos controvertidos, com fiança,
+  pequena quantidade/uso compartilhado);
+- **Prisão Preventiva** (2 modelos: descumprimento de MPU cronológico, e
+  tráfico/complexa com fumus/periculum, celular e incineração);
+- **Executivo de Pena / Justificação** (2 modelos: fluido e em tópicos);
+- **Cumprimento de Mandado / Prisão Civil** (origem em outra Vara/Comarca).
 
-A versão original era um artefato de página única que chamava
-`https://api.anthropic.com/v1/messages` **diretamente do navegador**. Isso nunca
-funciona em produção porque:
+## Como o texto é gerado
 
-- a **chave da API** ficaria exposta no front-end;
-- faltavam os cabeçalhos obrigatórios `x-api-key` e `anthropic-version`;
-- a API da Anthropic bloqueia chamadas diretas do navegador (CORS).
+A versão 4.0 substituiu a geração por IA por um **motor de deliberações
+determinístico**, montado a partir dos modelos reais da Vara. Isso significa:
 
-Agora o front-end chama `/api/messages`, e um pequeno servidor **Express**
-(`server.js`) encaminha a requisição para a Anthropic adicionando a chave e o
-cabeçalho de versão no lado do servidor.
+- **Sem IA, sem chave de API, sem custo** — o texto é montado instantaneamente
+  no navegador a partir dos campos preenchidos;
+- **Sem back-end** — não há servidor nem chamadas de rede; pode ser hospedado em
+  qualquer serviço de site estático (ex.: Vercel) ou aberto localmente;
+- **Previsível** — o mesmo formulário sempre produz o mesmo texto.
 
 ## Pré-requisitos
 
 - Node.js 20.6+ (testado com Node 22)
-- Uma chave de API da Anthropic
-
-## Configuração
-
-```bash
-npm install
-cp .env.example .env      # edite e coloque sua ANTHROPIC_API_KEY
-```
 
 ## Desenvolvimento
 
 ```bash
+npm install
 npm run dev
 ```
 
-Sobe dois processos:
-
-- **Vite** (front-end) em http://localhost:5173
-- **Proxy Express** em http://localhost:8787
-
-Abra http://localhost:5173. As chamadas `/api` são encaminhadas ao proxy
-automaticamente.
+Abra http://localhost:5173.
 
 ## Produção
 
 ```bash
 npm run build      # gera dist/
-npm start          # serve dist/ + proxy na mesma porta (8787)
+npm run preview    # serve o dist/ localmente para conferência
 ```
 
-Acesse http://localhost:8787.
+O conteúdo de `dist/` é estático e pode ser publicado diretamente.
 
-## Importar processo em PDF (preenchimento automático)
+## Fluxo de uso
 
-Na etapa **Cabeçalho** há o painel **"Importar processo (PDF) e preencher
-automaticamente"**. Ao selecionar o PDF do auto de prisão / BOC / processo:
+1. **Tipo de Audiência** — escolha o tipo, o sub-modelo de decisão e se é
+   plantão judiciário regional (altera fundamentação e assinatura);
+2. **Cabeçalho → Informações Processuais** — preencha os dados do BNMP;
+3. **Deliberações** — preencha os campos específicos da decisão e clique em
+   **"Montar Deliberações"**: o texto completo é gerado na hora (e pode ser
+   editado livremente antes de exportar);
+4. **Documento Final** — **Copiar com formatação** (cola no Word com tabelas,
+   negrito e sublinhado preservados), **Gerar DOCX** ou **Imprimir/Salvar PDF**.
 
-1. o PDF é lido no navegador e enviado ao Claude como **documento** (sem
-   bibliotecas externas) — a própria API processa **texto e imagens**, então
-   funciona tanto com PDFs do PJe quanto com digitalizados;
-2. o Claude devolve um JSON estruturado com os dados encontrados;
-3. apenas campos reconhecidos e válidos são mesclados ao formulário — o que não
-   for localizado fica em branco e a IA é instruída a **não inventar** dados.
+## Formatação do documento
 
-Limite: ~20 MB por arquivo (teto da API). Campos preenchidos quando presentes:
-número do processo, auto/mandado, nome, filiação, data de nascimento, endereço,
-celular, CPF, RG, naturalidade, crime imputado, drogas/arma apreendidas,
-antecedentes e um resumo dos fatos. Sempre revise antes de gerar o documento.
-
-> Requer `ANTHROPIC_API_KEY` configurada (mesma usada na geração das
-> deliberações).
+- Fonte **Garamond 13pt**, entrelinha 18pt exata, 12pt após parágrafo,
+  justificado;
+- Margens A4: Superior **3,95 cm** · Inferior **0,75 cm** · Esquerda **3 cm** ·
+  Direita **2 cm**;
+- O DOCX é montado por um gerador de ZIP/OOXML puro em JavaScript, sem
+  dependências externas.
 
 > **Arquivo único / artefato:** `src/App.jsx` é autossuficiente (importa apenas
-> de `react`). Pode ser usado diretamente como artefato do Claude — nesse caso a
-> chamada à API é autenticada pelo próprio sandbox, sem precisar do proxy.
-
-## Observações
-
-- A geração de deliberações usa o modelo `claude-sonnet-4-6`.
-- Sem a `ANTHROPIC_API_KEY` o app funciona normalmente; apenas o botão
-  **"Gerar Deliberações com IA"** retornará erro explicativo.
-- O documento final usa a fonte **EB Garamond 13pt** e está pronto para
-  **Imprimir / Salvar como PDF** com margens A4.
+> de `react`) e pode ser usado diretamente como artefato do Claude.
