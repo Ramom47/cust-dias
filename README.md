@@ -21,6 +21,20 @@ determinístico**, montado a partir dos modelos reais da Vara. Isso significa:
   qualquer serviço de site estático (ex.: Vercel) ou aberto localmente;
 - **Previsível** — o mesmo formulário sempre produz o mesmo texto.
 
+## Preenchimento dos dados (PDF ou manual)
+
+No primeiro passo é possível escolher entre:
+
+- **Extrair dados de um PDF do processo** — a leitura do texto é feita
+  **inteiramente no navegador** (biblioteca `pdfjs-dist`, carregada sob demanda),
+  sem envio à internet e sem custo. Heurísticas reconhecem e preenchem
+  automaticamente campos como número do processo (CNJ), nome, CPF, RG, filiação,
+  data de nascimento, naturalidade, endereço e celular. PDFs digitalizados (só
+  imagem, sem texto pesquisável) não podem ser lidos automaticamente;
+- **Preencher manualmente** — basta avançar pelos passos e digitar os dados.
+
+Em ambos os casos, **revise sempre** os campos antes de gerar o documento.
+
 ## Pré-requisitos
 
 - Node.js 20.6+ (testado com Node 22)
@@ -46,8 +60,9 @@ O conteúdo de `dist/` é estático e pode ser publicado diretamente.
 ## Fluxo de uso
 
 1. **Tipo de Audiência** — escolha o tipo, o sub-modelo de decisão e se é
-   plantão judiciário regional (altera fundamentação e assinatura);
-2. **Cabeçalho → Informações Processuais** — preencha os dados do BNMP;
+   plantão judiciário regional (altera fundamentação e assinatura). Aqui você
+   pode **extrair os dados de um PDF do processo** ou **preencher manualmente**;
+2. **Cabeçalho → Informações Processuais** — preencha/revise os dados do BNMP;
 3. **Deliberações** — preencha os campos específicos da decisão e clique em
    **"Montar Deliberações"**: o texto completo é gerado na hora (e pode ser
    editado livremente antes de exportar);

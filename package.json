@@ -1,7 +1,7 @@
 {
   "name": "cust-dias",
   "private": true,
-  "version": "4.0.0",
+  "version": "4.1.0",
   "type": "module",
   "description": "Sistema de Audiência de Custódia — 3ª Vara Criminal de Campo Verde/MT",
   "scripts": {
@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "pdfjs-dist": "^4.7.76",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

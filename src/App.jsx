@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 const TIPOS = [
   { v:"LIBERDADE", title:"Liberdade Provisória", sub:"Audiência de Custódia", badge:"bg-emerald-100 text-emerald-800", dot:"bg-emerald-500" },
@@ -204,13 +204,13 @@ function montarLiberdadePadrao(f) {
   const sujeito = pron === "ela" ? "a acusada" : "o acusado";
   P.push(`No caso em tela, tem-se a acusação da prática de ${f.crimeImputado}, cuja pena, cominada, não supera 04 anos.`);
   if (f.mpuDeferidas === "Sim") {
-    P.push(`Por sua vez, a vítima **${f.nomeVitima || "—"}** requereu medidas protetivas de urgência, as quais foram deferidas durante plantão judiciário nos autos n.º ${f.numMPU || "—"}.`);
+    P.push(`Por sua vez, a vítima **${f.nomeVitima || MARCADOR_LACUNA}** requereu medidas protetivas de urgência, as quais foram deferidas durante plantão judiciário nos autos n.º ${f.numMPU || MARCADOR_LACUNA}.`);
   }
   P.push(`Em liame, verifica-se que ${sujeito} é **${f.primario === "Sim" ? "primário" : "reincidente"}**, o que nessa fase de cognição primária, não resta evidenciado o risco a ordem pública. Por fim, aliado a isso, ressai do caderno processual em exame que o Indiciado informou possuir **${f.residenciaFixa === "Sim" ? "residência fixa" : "residência não comprovada"}** e **${f.empregoLicito === "Sim" ? "emprego lícito" : "ocupação não comprovada"}**, o que, a princípio, não demostra risco ao deslinde da ação penal ou necessidade de assegurar eventual aplicação da lei penal.`);
   P.push(`Desse modo, não vislumbro a necessidade da manutenção de sua prisão como garantia da ordem pública, da ordem econômica, por conveniência da instrução processual ou para assegurar a aplicação da lei penal, não estando presentes, portanto, as hipóteses que autorizam a prisão preventiva, a teor do disposto no artigo 312 do Código de Processo Penal. A jurisprudência, casos tais, assim tem entendido: *“É possível a concessão de liberdade provisória ao agente primário, com profissão definida e residência fixa, por não estarem presentes os pressupostos ensejadores da manutenção da custódia cautelar”* (RJDTACRIM 40/321). Assim, diante das particularidades do caso em tela, nada há a impedir que se lhe conceda a liberdade provisória, desde que impondo-lhe algumas medidas cautelares.`);
   P.push(`Face ao exposto, **CONCEDO** liberdade provisória ao Autuado **${f.nomeAutuado}**, podendo o requerente responder em liberdade, desde que outras razões não venham a justificar a sua segregação, mediante o cumprimento das seguintes medidas cautelares diversas, nos termos do art. 319 do CPP:`);
   P.push(...listaMedidas(f.medidasCautelares));
-  if (f.mpuDeferidas === "Sim") P.push(`Deverá ${pron === "ela" ? "a indiciada" : "o indiciado"} cumprir integralmente a Medida Protetiva de Urgência em seu desfavor, nos autos n.º ${f.numMPU || "—"}.`);
+  if (f.mpuDeferidas === "Sim") P.push(`Deverá ${pron === "ela" ? "a indiciada" : "o indiciado"} cumprir integralmente a Medida Protetiva de Urgência em seu desfavor, nos autos n.º ${f.numMPU || MARCADOR_LACUNA}.`);
   if (f.notificarVitima === "Sim") P.push(`**NOTIFIQUE-SE** a vítima desta decisão, notadamente quanto à concessão da liberdade provisória ao autuado.`);
   P.push(`**EXPEÇA-SE alvará de soltura, devendo o autuado ser colocado em liberdade, se por outro motivo não estiver preso.**`);
   P.push(fechoBNMP(f));
@@ -268,7 +268,7 @@ function montarLiberdadeFianca(f) {
   P.push(`Entretanto, na forma do precitado art. 313, II e III, do CPP, só em caso de reincidência e, também, no de violência doméstica, para a garantia do cumprimento de medidas protetivas de urgência, é que tal restrição poderia ser imposta ao Indiciado, o que não é o caso dos autos. Dito isso, ressai que o Autuado é **${f.primario === "Sim" ? "primário" : "reincidente"}**, não restando evidenciado o risco a ordem pública. Aliado a isso, ressai do caderno processual em exame que o Indiciado informou possuir **${[f.residenciaFixa === "Sim" ? "residência fixa" : "", f.empregoLicito === "Sim" ? "emprego lícito" : ""].filter(Boolean).join(" e ")}**, o que, a princípio, não demostra risco ao deslinde da ação penal ou necessidade de assegurar eventual aplicação da lei penal. Por fim, da análise do caso em concreto, não é possível extrair gravidade extrema, além do normalmente previsto no tipo penal analisado, o bastante para decretar a privação de liberdade do autuado, sendo que, neste momento processual, a sua custódia corpórea pode ser substituída por medidas cautelares diversas da prisão, para que o Delegado de Polícia dê continuidade às investigações.`);
   P.push(PARA_HC154094);
   P.push(`Desse modo, não vislumbro a necessidade da manutenção de sua prisão como garantia da ordem pública, da ordem econômica, por conveniência da instrução processual ou para assegurar a aplicação da lei penal, não estando presentes, portanto, as hipóteses que autorizam a prisão preventiva, a teor do disposto no artigo 312 do Código de Processo Penal. A jurisprudência, casos tais, assim tem entendido: *“É possível a concessão de liberdade provisória ao agente primário, com profissão definida e residência fixa, por não estarem presentes os pressupostos ensejadores da manutenção da custódia cautelar”* (RJDTACRIM 40/321). Assim, diante das particularidades do caso em tela, nada há a impedir que se lhe conceda a liberdade provisória, desde que impondo-lhe algumas medidas cautelares. Face ao exposto, **CONCEDO** liberdade provisória ao indiciado **${f.nomeAutuado}**, podendo o requerente responder em liberdade, desde que outras razões não venham a justificar a sua segregação, mediante o cumprimento das seguintes medidas cautelares diversas, nos termos do art. 319 do CPP:`);
-  P.push(`- **Pagamento de fiança, fixada no valor de ${f.fiancaDescricao || "—"} (R$ ${f.fiancaValor || "—"});**`);
+  P.push(`- **Pagamento de fiança, fixada no valor de ${f.fiancaDescricao || MARCADOR_LACUNA} (R$ ${f.fiancaValor || MARCADOR_LACUNA});**`);
   P.push(...listaMedidas(f.medidasCautelares));
   P.push(`**Lavrado o termo competente, o valor arbitrado deverá ser depositado em conta judicial vinculada ao processo, expedindo-se, em seguida, o alvará de soltura em favor do flagrado**, colocando-o imediatamente em liberdade, salvo se por outro motivo não tiver que permanecer preso. Anoto que em caso de impossibilidade de pagamento do valor ora arbitrado, deverá o flagranteado comprovar tal condição através de documentos hábeis.`);
   P.push(fechoBNMP(f));
@@ -291,7 +291,7 @@ function montarPreventivaCronologica(f) {
   P.push(...blocoFundamentos312313());
   P.push(`No caso em tela, tem-se a acusação da prática de ${f.crimeImputado}, cuja pena é de reclusão e supera 04 anos. Entretanto, conforme permissão do inciso III, do artigo 313 do CPP, é possível a decretação da prisão preventiva em caso de violência doméstica, para assegurar as medidas concedidas em face da vítima. Assim, ainda que não sendo o indiciado reincidente, visando a garantir o cumprimento de medidas protetivas de urgência, é que a prisão preventiva se impõe.`);
   P.push(`A materialidade e os indícios de autoria estão devidamente comprovados.`);
-  P.push(`Ressai dos autos que a vítima, ${f.nomeVitima || "—"}, possuía medidas protetivas deferidas em seu favor desde o dia ${fmtD(f.dataMPU) || "—"}, nos autos n.º ${f.numMPU || "—"}. ${f.condicoesMPU || "Tais medidas determinavam expressamente o afastamento e a proibição de contato com a vítima."} ${f.dataIntimacao ? `O indiciado foi devidamente intimado desta decisão em ${fmtD(f.dataIntimacao)}.` : ""}`);
+  P.push(`Ressai dos autos que a vítima, ${f.nomeVitima || MARCADOR_LACUNA}, possuía medidas protetivas deferidas em seu favor desde o dia ${f.dataMPU ? fmtD(f.dataMPU) : MARCADOR_LACUNA}, nos autos n.º ${f.numMPU || MARCADOR_LACUNA}. ${f.condicoesMPU || "Tais medidas determinavam expressamente o afastamento e a proibição de contato com a vítima."} ${f.dataIntimacao ? `O indiciado foi devidamente intimado desta decisão em ${fmtD(f.dataIntimacao)}.` : ""}`);
   P.push(`Entretanto, os descumprimentos da medida protetiva que culminaram na prisão do agressor consistiram em um **padrão contínuo de perseguição** conforme a seguinte ordem cronológica dos fatos ocorridos após a sua intimação:`);
   const fatos = (f.narrativaCronologica || "").split("\n").map(l => l.trim()).filter(Boolean);
   fatos.forEach((linha, i) => P.push(`**${i + 1}. ${linha}**`));
@@ -361,7 +361,7 @@ function montarExecutivoFluida(f) {
   P.push(`Outrossim, em caso de mudança de endereço e/ou dados pessoais (ex.: telefone) existentes no processo deverá ser imediatamente comunicado nos autos, sob pena de serem considerados como válidos aquele anteriormente declarados pelo recuperando.`);
   P.push(`**EXPEÇA-SE ALVARÁ DE SOLTURA em favor do apenado, colocando-o imediatamente em liberdade, salvo se por outro motivo não tiver que permanecer preso.**`);
   P.push(`O alvará de soltura deve ser registrado no BNMP.`);
-  P.push(`POR FIM, **JUNTE-SE** CÓPIA DA PRESENTE ATA NO EXECUTIVO DE PENA DE Nº **${f.numPEP || "—"}**.`);
+  P.push(`POR FIM, **JUNTE-SE** CÓPIA DA PRESENTE ATA NO EXECUTIVO DE PENA DE Nº **${f.numPEP || MARCADOR_LACUNA}**.`);
   P.push(`Os presentes saem intimados. Cumpra-se. Às providências.”.`);
   return P;
 }
@@ -401,7 +401,7 @@ function montarExecutivoTopicos(f) {
 function montarCumprimentoMandado(f) {
   const pron = f.sexo === "Feminino" ? "ela" : "ele";
   const P = [];
-  P.push(`Vistos etc. Cuida-se de comunicação de cumprimento de mandado de prisão, expedido em face de **${f.nomeAutuado}**, oriundo ${f.varaOrigem || "de outro Juízo"}. ${CLAUSULA_DILIGENCIA_PADRAO(pron)}`);
+  P.push(`Vistos etc. Cuida-se de comunicação de cumprimento de mandado de prisão, expedido em face de **${f.nomeAutuado}**, oriundo ${f.varaOrigem || MARCADOR_LACUNA}. ${CLAUSULA_DILIGENCIA_PADRAO(pron)}`);
   P.push(`Dessa forma, **OFICIE-SE** a${f.varaOrigem ? f.varaOrigem.replace(/^d[aeo]\s*/i, " ") : " o Juízo de origem"}, prestando-lhe as devidas informações acerca da prisão, COM URGÊNCIA, encaminhando o presente termo e a mídia da audiência.`);
   P.push(`**DETERMINO** que em relação ao presente Cumprimento de Mandado de Prisão seja lançada a certidão do cumprimento no BNMP.`);
   P.push(`**PROCEDA-SE** ao necessário para a transferência do preso a unidade prisional mais próxima desta Comarca.`);
@@ -431,6 +431,133 @@ function montarDeliberacoes(f) {
     paras = montarCumprimentoMandado(f);
   }
   return paras.filter(Boolean).join("\n");
+}
+
+// ════════════════════════════════════════════════════════════════════
+// REVISOR FINAL — validação automática antes da entrega (skill minutas)
+// Garante que a minuta saia pronta: aponta lacunas, incoerências e
+// confere a nomenclatura padronizada do TJMT.
+// ════════════════════════════════════════════════════════════════════
+const MARCADOR_LACUNA = "[DADO NÃO LOCALIZADO NOS AUTOS]";
+
+// Campos essenciais por etapa, comuns a todos os tipos
+const CAMPOS_BASE = [
+  ["numProcesso", "Número do processo (máscara CNJ)"],
+  ["nomeAutuado", "Nome do autuado/reeducando"],
+  ["dataAudiencia", "Data da audiência"],
+  ["magistrado", "Magistrado(a)"],
+];
+
+// Campos essenciais específicos por tipo + sub-modelo
+function camposEssenciais(f) {
+  const req = [...CAMPOS_BASE];
+  if (f.tipo === "LIBERDADE") {
+    req.push(["crimeImputado", "Crime imputado"], ["artFlagrante", "Fundamentação do flagrante"]);
+    if ((f.medidasCautelares || []).length === 0) req.push(["medidasCautelares", "Medidas cautelares (art. 319 CPP)"]);
+    if (f.subModelo === "padrao" && f.mpuDeferidas === "Sim") req.push(["nomeVitima", "Nome da vítima"], ["numMPU", "Número dos autos das MPUs"]);
+    if (f.subModelo === "controvertida") req.push(["narrativaControvertida", "Narrativa dos fatos controvertidos"]);
+    if (f.subModelo === "fianca") req.push(["fiancaValor", "Valor da fiança"], ["fiancaDescricao", "Descrição da fiança (salários mínimos)"]);
+    if (f.subModelo === "trafico" && f.oficiarOutroJuizo === "Sim") req.push(["juizoOficio", "Juízo a ser oficiado"], ["processoOficio", "Processo de origem"]);
+  } else if (f.tipo === "PREVENTIVA") {
+    req.push(["crimeImputado", "Crime imputado"]);
+    if (f.subModelo === "cronologica") {
+      req.push(["artFlagranteP", "Fundamentação do flagrante"], ["nomeVitima", "Nome da vítima"], ["numMPU", "Número dos autos das MPUs"], ["narrativaCronologica", "Fatos do descumprimento (um por linha)"]);
+    } else {
+      req.push(["fundamentoFinal", "Fundamento concreto da segregação"], ["narrativaPolicial", "Narrativa da ocorrência policial"]);
+    }
+  } else if (f.tipo === "EXECUTIVO") {
+    req.push(["regimeAtual", "Regime em execução"], ["regimeMantido", "Regime mantido"]);
+    if (f.subModelo === "fluida") req.push(["numPEP", "Número do PEP"], ["mesInicio", "Mês de início das condições"]);
+    if (f.subModelo === "topicos") req.push(["comarcaCumprimento", "Comarca de cumprimento"]);
+    if ((f.condicoesRegime || []).length === 0) req.push(["condicoesRegime", "Condições do regime"]);
+  } else if (f.tipo === "CUMPRIMENTO") {
+    req.push(["varaOrigem", "Vara/Comarca de origem"]);
+  }
+  return req;
+}
+
+// Valida máscara CNJ: NNNNNNN-DD.AAAA.J.TR.OOOO
+function cnjValido(n) {
+  return /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/.test((n || "").trim());
+}
+
+// Resultado decisório legível para nome de arquivo
+function resultadoDecisorio(f) {
+  if (f.tipo === "LIBERDADE") return "Liberdade Provisória";
+  if (f.tipo === "PREVENTIVA") return "Prisão Preventiva";
+  if (f.tipo === "EXECUTIVO") return f.justificativaAcolhida === "Sim" ? "Justificativa Acolhida" : "Justificação";
+  if (f.tipo === "CUMPRIMENTO") return "Cumprimento de Mandado";
+  return "Decisão";
+}
+
+// Descritor curto do crime/assunto para nome de arquivo
+function crimeCurto(f) {
+  if (f.tipo === "EXECUTIVO") return "Executivo de Pena";
+  if (f.tipo === "CUMPRIMENTO") return "Prisão Civil";
+  const c = (f.crimeImputado || "").toLowerCase();
+  if (c.includes("11.343") || c.includes("tráfico") || c.includes("trafico") || c.includes("droga")) return "Tráfico de Drogas";
+  if (c.includes("11.340") || c.includes("129") || c.includes("doméstica") || c.includes("domestica") || c.includes("maria da penha")) return "Violência Doméstica";
+  if (c.includes("trânsito") || c.includes("transito") || c.includes("ctb") || c.includes("303") || c.includes("306")) return "Trânsito";
+  if (c.includes("furto")) return "Furto";
+  if (c.includes("roubo")) return "Roubo";
+  if (c.includes("arma") || c.includes("10.826")) return "Arma de Fogo";
+  return "Criminal";
+}
+
+// Nome de arquivo padronizado conforme a skill minutas-criminais
+function nomeArquivoPadrao(f) {
+  const titulo = f.tipo === "EXECUTIVO" ? "Audiência de Custódia-Justificação" : "Audiência de Custódia";
+  const cnj = cnjValido(f.numProcesso) ? f.numProcesso : (f.numProcesso || "SEM-NUMERO");
+  const nome = (f.nomeAutuado || "SEM NOME").toUpperCase();
+  const bruto = `Criminal - ${titulo} - ${resultadoDecisorio(f)} - ${crimeCurto(f)} - ${cnj} - ${nome}`;
+  // Sanitiza caracteres inválidos para nome de arquivo, preservando espaços, hífen e ponto
+  return bruto.replace(/[\/\\:*?"<>|]/g, "-").replace(/\s+/g, " ").trim() + ".docx";
+}
+
+// Revisor Final: devolve { status, corrigido[], atencao[], lacunas[], arquivo }
+function revisarMinuta(f) {
+  const atencao = [];
+  const lacunas = [];
+
+  // Bloco 1/2 — campos essenciais ausentes
+  const essenciais = camposEssenciais(f);
+  essenciais.forEach(([campo, rotulo]) => {
+    const v = f[campo];
+    const vazio = v == null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && v.length === 0);
+    if (vazio) lacunas.push(rotulo);
+  });
+
+  // CNJ
+  if (f.numProcesso && !cnjValido(f.numProcesso)) {
+    atencao.push("Número do processo não está na máscara CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO).");
+  }
+
+  // Texto montado contém marcador de lacuna?
+  if ((f.deliberacoesTexto || "").includes(MARCADOR_LACUNA)) {
+    atencao.push("O texto das deliberações contém marcações " + MARCADOR_LACUNA + " — preencha os campos correspondentes antes de assinar.");
+  }
+
+  // Bloco 3 — coerência decisória
+  const txt = f.deliberacoesTexto || "";
+  if (f.tipo === "LIBERDADE" && /\bDECRETO A PRISÃO PREVENTIVA\b/.test(txt)) {
+    atencao.push("Incoerência: tipo Liberdade Provisória, mas o texto decreta prisão preventiva.");
+  }
+  if (f.tipo === "PREVENTIVA" && /\bCONCEDO\b\s+liberdade/i.test(txt)) {
+    atencao.push("Incoerência: tipo Prisão Preventiva, mas o texto concede liberdade provisória.");
+  }
+  if (f.tipo === "PREVENTIVA" && f.subModelo === "cronologica") {
+    const fatos = (f.narrativaCronologica || "").split("\n").map(s => s.trim()).filter(Boolean);
+    if (fatos.length === 0) atencao.push("Preventiva por descumprimento sem nenhum fato cronológico listado.");
+  }
+  if (f.tipo === "PREVENTIVA" && f.subModelo === "complexa" && f.pedidoIncineracao === "Sim" && !f.incineracaoResultado) {
+    atencao.push("Pedido de incineração marcado, mas sem resultado (Deferido/Indeferido) definido.");
+  }
+
+  // Bloco 6 — nome de arquivo
+  const arquivo = nomeArquivoPadrao(f);
+
+  const status = lacunas.length === 0 ? "PRONTO PARA ASSINATURA" : "REQUER COMPLEMENTAÇÃO";
+  return { status, atencao, lacunas, arquivo };
 }
 
 
@@ -797,6 +924,95 @@ function DocPreview({ f }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════
+// IMPORTAÇÃO DE PROCESSO POR PDF — extração 100% no navegador
+// pdfjs extrai o texto; um parser determinístico (regex/rótulos) preenche
+// os campos que conseguir localizar. Zero IA, zero rede além do worker
+// empacotado pelo Vite. O usuário sempre revisa antes de gerar a minuta.
+// ════════════════════════════════════════════════════════════════════
+async function extrairTextoPdf(file) {
+  const pdfjsLib = await import("pdfjs-dist");
+  const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let texto = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    texto += content.items.map(it => it.str).join(" ") + "\n";
+  }
+  return texto;
+}
+
+// Captura o trecho após um rótulo até o próximo rótulo/limite conhecido
+function aposRotulo(t, rotulos, limite) {
+  for (const r of rotulos) {
+    const re = new RegExp(r + "\\s*:?\\s*(.+?)\\s*(?:" + limite + ")", "i");
+    const m = t.match(re);
+    if (m && m[1] && m[1].trim().length > 1) return m[1].trim().replace(/\s+/g, " ");
+  }
+  return "";
+}
+
+// Converte data textual → ISO (yyyy-mm-dd) para inputs type=date
+function dataParaISO(s) {
+  if (!s) return "";
+  const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+// Parser determinístico — best effort sobre o auto de prisão / BNMP
+function parseProcessoTexto(texto) {
+  const t = (texto || "").replace(/[ \t]+/g, " ").replace(/ /g, " ");
+  const tFlat = t.replace(/\s+/g, " ");
+  const out = {};
+  const achados = [];
+  const STOP = "Nome|Filiação|Filiacao|Data|Nascimento|Naturalidade|Endereço|Endereco|CPF|RG|Identidade|Sexo|Cor|Raça|Telefone|Celular|Profiss|Estado civil|Escolaridade|\\n|$";
+
+  const cnj = tFlat.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/);
+  if (cnj) { out.numProcesso = cnj[0]; out.numAutoMandado = cnj[0]; achados.push("Número do processo"); }
+
+  const cpf = tFlat.match(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/);
+  if (cpf) { out.cpf = cpf[0]; achados.push("CPF"); }
+
+  const nome = aposRotulo(tFlat, ["Nome do (?:autuado|conduzido|indiciado|preso|flagranteado)", "Nome completo", "Nome"], STOP);
+  if (nome) { out.nomeAutuado = nome.toUpperCase(); achados.push("Nome do autuado"); }
+
+  const pai = aposRotulo(tFlat, ["Nome do pai", "Filiação paterna", "Pai"], STOP);
+  if (pai && !/n[ãa]o (consta|informad)/i.test(pai)) { out.filiacaoPai = pai.toUpperCase(); achados.push("Filiação (pai)"); }
+  const mae = aposRotulo(tFlat, ["Nome da m[ãa]e", "Filiação materna", "M[ãa]e"], STOP);
+  if (mae) { out.filiacaoMae = mae.toUpperCase(); achados.push("Filiação (mãe)"); }
+
+  const filiacao = aposRotulo(tFlat, ["Filiação", "Filiacao"], "CPF|RG|Data|Nascimento|Naturalidade|Endereço|\\n|$");
+  if (filiacao && !out.filiacaoMae) {
+    const partes = filiacao.split(/\s+e\s+|\s+E\s+/);
+    if (partes[0]) { out.filiacaoPai = partes[0].trim().toUpperCase(); }
+    if (partes[1]) { out.filiacaoMae = partes[1].trim().toUpperCase(); achados.push("Filiação"); }
+  }
+
+  const nasc = aposRotulo(tFlat, ["Data de nascimento", "Nascido em", "Nascimento", "Data de Nasc"], STOP);
+  const nascISO = dataParaISO(nasc) || dataParaISO(tFlat);
+  const labelNasc = aposRotulo(tFlat, ["Data de nascimento", "Nascimento"], STOP);
+  if (dataParaISO(labelNasc)) { out.dataNasc = dataParaISO(labelNasc); achados.push("Data de nascimento"); }
+
+  const rg = aposRotulo(tFlat, ["RG", "Identidade", "Registro Geral"], "CPF|Órg[ãa]o|Data|Nascimento|Naturalidade|Endereço|SSP|\\n|$");
+  if (rg && /\d/.test(rg)) { out.rg = rg.replace(/[^0-9A-Za-z.\-\/ ]/g, "").trim(); achados.push("RG"); }
+
+  const cel = tFlat.match(/\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4}/);
+  if (cel) { out.celular = cel[0].trim(); achados.push("Celular"); }
+
+  const natural = aposRotulo(tFlat, ["Naturalidade", "Natural de"], "Nacionalidade|Data|Nascimento|Endereço|CPF|RG|\\n|$");
+  if (natural) { out.naturalidade = natural; achados.push("Naturalidade"); }
+
+  const endereco = aposRotulo(tFlat, ["Endereço residencial", "Endereço", "Residente", "Reside"], "CPF|RG|Telefone|Celular|Profiss|Naturalidade|Data|Filiação|\\n|$");
+  if (endereco && endereco.length > 4) { out.endereco = endereco; achados.push("Endereço"); }
+
+  if (/feminino/i.test(tFlat) && !/masculino/i.test(tFlat)) out.sexo = "Feminino";
+
+  return { campos: out, achados };
+}
+
 // ── Main App ─────────────────────────────────────────────────
 export default function App() {
   const [step, setStep] = useState(0);
@@ -807,9 +1023,33 @@ export default function App() {
   const [docxUrl, setDocxUrl] = useState('');
   const [docxName, setDocxName] = useState('');
   const [loadingDocx, setLoadingDocx] = useState(false);
+  const [revisao, setRevisao] = useState(null);
+  const [importando, setImportando] = useState(false);
+  const [importInfo, setImportInfo] = useState(null);
+  const fileRef = useRef(null);
 
   const set = useCallback((k, v) => setF(p => ({ ...p, [k]: v })), []);
   const tipo = TIPOS.find(t => t.v === f.tipo);
+
+  const importarPdf = async (file) => {
+    if (!file) return;
+    setImportando(true); setErr(""); setImportInfo(null);
+    try {
+      const texto = await extrairTextoPdf(file);
+      const { campos, achados } = parseProcessoTexto(texto);
+      if (Object.keys(campos).length === 0) {
+        setImportInfo({ achados: [], aviso: "Não foi possível localizar dados estruturados neste PDF. Preencha manualmente nos próximos passos." });
+      } else {
+        setF(p => ({ ...p, ...campos }));
+        setImportInfo({ achados, aviso: "" });
+      }
+    } catch (e) {
+      setErr("Falha ao ler o PDF: " + e.message);
+    } finally {
+      setImportando(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -834,6 +1074,7 @@ export default function App() {
       else if (f.tipo === "EXECUTIVO") closingType = "gravacao";
       set("closingType", closingType);
       set("deliberacoesTexto", t);
+      setRevisao(revisarMinuta({ ...f, deliberacoesTexto: t, closingType }));
       setStep(7);
     } catch (e) { setErr(e.message); }
   };
@@ -878,8 +1119,7 @@ export default function App() {
         r.readAsDataURL(blob);
       });
       setDocxUrl(dataUrl);
-      const nome = (f.nomeAutuado || 'audiencia').replace(/\s+/g, '_').substring(0, 40);
-      setDocxName('Termo_' + nome + '.docx');
+      setDocxName(nomeArquivoPadrao(f));
     } catch(e) { setErr('Erro ao gerar DOCX: ' + e.message); }
     finally { setLoadingDocx(false); }
   };
@@ -889,6 +1129,32 @@ export default function App() {
       <div>
         <h2 className="text-lg font-semibold text-slate-800 mb-1">Tipo de Audiência</h2>
         <p className="text-sm text-slate-500 mb-6">Selecione o tipo de audiência para gerar a minuta correta.</p>
+
+        {/* ── Como preencher: importar PDF ou manual ── */}
+        <div className="mb-6 bg-white rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-700 mb-1">Como preencher os dados?</h3>
+          <p className="text-xs text-slate-500 mb-3">
+            Extraia automaticamente os dados de um PDF do processo (auto de prisão / BNMP) ou preencha manualmente nos próximos passos. Em ambos os casos você confere e edita tudo antes de gerar a minuta.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="pdf-import"
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all ${importando ? "bg-slate-200 text-slate-500" : "bg-slate-800 text-white hover:bg-slate-700"}`}>
+              {importando ? "⟳ Extraindo dados..." : "📎 Extrair dados de um PDF"}
+            </label>
+            <input id="pdf-import" ref={fileRef} type="file" accept="application/pdf" className="hidden"
+              disabled={importando}
+              onChange={e => importarPdf(e.target.files && e.target.files[0])} />
+            <span className="text-xs text-slate-400">ou siga adiante para preencher manualmente →</span>
+          </div>
+          {importInfo && (
+            <div className={`mt-3 text-sm rounded-lg p-3 ${importInfo.aviso ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-emerald-50 text-emerald-800 border border-emerald-200"}`}>
+              {importInfo.aviso
+                ? importInfo.aviso
+                : <>✓ Dados localizados e preenchidos: <strong>{importInfo.achados.join(", ")}</strong>. Confira cada passo e complete o que faltar.</>}
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 gap-4">
           {TIPOS.map(t => (
             <button key={t.v} onClick={() => { set("tipo", t.v); set("subModelo", (SUBMODELOS[t.v] || [])[0]?.v || ""); }}
@@ -933,7 +1199,8 @@ export default function App() {
         <h2 className="text-lg font-semibold text-slate-800 mb-4">Cabeçalho do Termo</h2>
         <Card title="Processo">
           <Inp label="Número do Processo" val={f.numProcesso} onChange={v => { set("numProcesso", v); if (!f.numAutoMandado) set("numAutoMandado", v); }} required placeholder="0000000-00.0000.8.11.0000" />
-          <Inp label="Nome do Autuado / Reeducando" val={f.nomeAutuado} onChange={v => set("nomeAutuado", v)} required placeholder="NOME COMPLETO EM MAIÚSCULAS" />
+          {f.numProcesso && !cnjValido(f.numProcesso) && <p className="text-xs text-amber-600 -mt-2">Formato CNJ esperado: NNNNNNN-DD.AAAA.8.11.OOOO</p>}
+          <Inp label="Nome do Autuado / Reeducando" val={f.nomeAutuado} onChange={v => set("nomeAutuado", v.toUpperCase())} required placeholder="NOME COMPLETO EM MAIÚSCULAS" />
           <Inp label="Data da Audiência" val={f.dataAudiencia} onChange={v => set("dataAudiencia", v)} type="date" />
           <Inp label="Hora da Audiência" val={f.horaAudiencia} onChange={v => set("horaAudiencia", v)} type="time" />
         </Card>
@@ -1190,7 +1457,7 @@ export default function App() {
           <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
             <h3 className="text-sm font-semibold text-amber-800 mb-2">Deliberações — Texto Montado</h3>
             {f.deliberacoesTexto
-              ? <Txt label="" val={f.deliberacoesTexto} onChange={v => set("deliberacoesTexto", v)} rows={14} />
+              ? <Txt label="" val={f.deliberacoesTexto} onChange={v => { set("deliberacoesTexto", v); setRevisao(revisarMinuta({ ...f, deliberacoesTexto: v })); }} rows={14} />
               : <p className="text-sm text-amber-700">Clique em &#8220;✦ Montar Deliberações&#8221; para gerar o texto completo da decisão a partir dos modelos da Vara.</p>}
           </div>
           {err && <p className="mt-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">{err}</p>}
@@ -1198,7 +1465,10 @@ export default function App() {
       );
     }
 
-    if (step === 7) return (
+    if (step === 7) {
+      const r = revisao || revisarMinuta(f);
+      const pronto = r.status === "PRONTO PARA ASSINATURA";
+      return (
       <div>
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <h2 className="text-lg font-semibold text-slate-800">Documento Final</h2>
@@ -1209,8 +1479,9 @@ export default function App() {
             </button>
             {!docxUrl
               ? <button onClick={prepararDocx} disabled={loadingDocx}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50">
-                  {loadingDocx ? "⟳ Gerando..." : "📄 Gerar DOCX"}
+                  title={!pronto ? "A minuta tem lacunas — você ainda pode gerar, mas confira os pontos do Revisor" : undefined}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 ${pronto ? "bg-amber-500 text-slate-900 hover:bg-amber-400" : "bg-amber-300 text-slate-900 hover:bg-amber-200"}`}>
+                  {loadingDocx ? "⟳ Gerando..." : (pronto ? "📄 Gerar DOCX" : "📄 Gerar DOCX (com ressalvas)")}
                 </button>
               : <a href={docxUrl} download={docxName}
                   onClick={() => setTimeout(() => setDocxUrl(''), 3000)}
@@ -1225,6 +1496,41 @@ export default function App() {
           </div>
         </div>
         {err && <p className="mb-3 text-sm text-red-600 bg-red-50 p-3 rounded-lg">{err}</p>}
+
+        {/* ── Relatório do Revisor Final (skill minutas-criminais) ── */}
+        <div className={`mb-4 rounded-xl border overflow-hidden ${pronto ? "border-emerald-300" : "border-amber-300"}`}>
+          <div className={`px-4 py-2.5 flex items-center justify-between ${pronto ? "bg-emerald-50" : "bg-amber-50"}`}>
+            <h3 className={`text-sm font-bold tracking-wide ${pronto ? "text-emerald-800" : "text-amber-800"}`}>
+              RELATÓRIO DO REVISOR FINAL
+            </h3>
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${pronto ? "bg-emerald-600 text-white" : "bg-amber-500 text-slate-900"}`}>
+              {pronto ? "✔ PRONTO PARA ASSINATURA" : "⚠ REQUER COMPLEMENTAÇÃO"}
+            </span>
+          </div>
+          <div className="bg-white px-4 py-3 text-sm text-slate-700 flex flex-col gap-2">
+            {r.lacunas.length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-700 mb-1">Dados não localizados (preencha no passo "Deliberações"):</p>
+                <ul className="list-disc list-inside text-slate-600 space-y-0.5">
+                  {r.lacunas.map((l, i) => <li key={i}>{l}</li>)}
+                </ul>
+              </div>
+            )}
+            {r.atencao.length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-700 mb-1">Pontos de atenção:</p>
+                <ul className="list-disc list-inside text-slate-600 space-y-0.5">
+                  {r.atencao.map((a, i) => <li key={i}>{a}</li>)}
+                </ul>
+              </div>
+            )}
+            {r.lacunas.length === 0 && r.atencao.length === 0 && (
+              <p className="text-emerald-700">Nenhuma pendência detectada. Confira os dados sensíveis (drogas, valores, antecedentes) sempre contra os autos antes de assinar.</p>
+            )}
+            <p className="text-xs text-slate-400 mt-1 break-all"><span className="font-semibold">Arquivo:</span> {r.arquivo}</p>
+          </div>
+        </div>
+
         <div className="bg-slate-100 rounded-xl overflow-auto border border-slate-200">
           <DocPreview f={f} />
         </div>
@@ -1235,7 +1541,8 @@ export default function App() {
           </p>
         </div>
       </div>
-    );
+      );
+    }
 
     return null;
   };
@@ -1273,7 +1580,7 @@ export default function App() {
         </nav>
         <div className="px-4 pt-4 border-t border-slate-800">
           <p className="text-xs text-slate-500">Audiência de Custódia</p>
-          <p className="text-xs text-slate-600">v4.0 · 9 modelos · sem IA</p>
+          <p className="text-xs text-slate-600">v4.1 · 9 modelos · Importação PDF · Revisor Final</p>
         </div>
       </div>
 

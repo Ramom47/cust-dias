@@ -1,8 +1,8 @@
 # HANDOFF — Sistema de Audiência de Custódia (3ª Vara Criminal de Campo Verde/MT)
 
 > Documento de transferência de contexto. Resume o estado atual do projeto,
-> decisões de arquitetura, o que mudou na v4.0 e como continuar o trabalho.
-> Última atualização: 2026-06-21.
+> decisões de arquitetura, o que mudou na v4.0/v4.1 e como continuar o trabalho.
+> Última atualização: 2026-06-22.
 
 ## 1. Visão geral
 
@@ -14,9 +14,9 @@ sem back-end, sem chamadas de rede, sem chave de API e sem custo por documento.
 - Branch de desenvolvimento: `claude/busy-einstein-oseyjl`
 - Branch principal: `main`
 - Deploy: Vercel — site estático (`vite build` → `dist/`)
-- Versão atual: **4.0.0**
+- Versão atual: **4.1.0**
 
-## 2. Arquitetura atual (v4.0)
+## 2. Arquitetura atual (v4.1)
 
 ```
 src/App.jsx        ← arquivo único autossuficiente (importa só de "react")
@@ -34,21 +34,30 @@ tailwind/postcss   ← estilização
    em JavaScript, sem dependências.
 3. **Preview + impressão** (`DocPreview`, `injetarCSS`) — render fiel na tela e
    via "Imprimir / Salvar PDF".
-4. **Formulário em 8 passos** (componente `App`).
+4. **Importação de PDF local** (`extrairTextoPdf`, `parseProcessoTexto`) —
+   lê o texto pesquisável do PDF do processo **no próprio navegador** (`pdfjs-dist`,
+   via import dinâmico) e preenche os campos por heurística/regex. Zero rede,
+   zero IA. Manual continua sendo o caminho padrão.
+5. **Revisor Final** (`revisarMinuta` + `camposEssenciais`/`cnjValido`/
+   `nomeArquivoPadrao`) — valida a minuta antes da entrega: aponta lacunas,
+   incoerências decisórias e gera o nome de arquivo padronizado do TJMT.
+6. **Formulário em 8 passos** (componente `App`).
 
-## 3. O que mudou da v3.1 → v4.0
+## 3. O que mudou da v3.1 → v4.0 → v4.1
 
-| Antes (v3.1) | Agora (v4.0) |
-|---|---|
-| Deliberações geradas por IA (Claude API) | Motor determinístico, sem IA |
-| Importação de processo por PDF (pdfjs + visão) | **Removida** |
-| Proxy Anthropic (`server.js`, `api/messages.js`) | **Removido** (não há rede) |
-| Dependências: express, pdfjs-dist | **Removidas** |
-| 3 tipos de audiência | 4 tipos (+ **Cumprimento de Mandado/Prisão Civil**) |
-| 1 modelo por tipo | **9 modelos** com sub-modelos selecionáveis |
+| v3.1 | v4.0 | v4.1 |
+|---|---|---|
+| Deliberações por IA (Claude API) | Motor determinístico, sem IA | igual |
+| Importação de PDF (pdfjs + visão/IA) | **Removida** | **Reintroduzida 100% local** (pdfjs + regex, sem IA/rede) |
+| Proxy Anthropic (`server.js`, `api/messages.js`) | **Removido** | continua removido |
+| Dependências: express, pdfjs-dist | **Removidas** | **só `pdfjs-dist`** de volta (carga sob demanda) |
+| 3 tipos de audiência | 4 tipos (+ Cumprimento) | igual |
+| 1 modelo por tipo | **9 modelos** | igual |
+| — | — | **Revisor Final** (lacunas/incoerências/nome de arquivo) |
 
-> Os arquivos removidos continuam recuperáveis pelo histórico do git, caso se
-> queira reintroduzir IA ou importação de PDF no futuro.
+> A importação de PDF da v4.1 **não** reintroduz back-end nem IA: tudo é feito no
+> navegador. `pdfjs-dist` é carregado por `import()` dinâmico, então só é baixado
+> quando o usuário escolhe importar um PDF (o build o separa em chunk próprio).
 
 ## 4. Modelos de decisão disponíveis
 
@@ -86,7 +95,9 @@ Saídas no Passo 7 (Documento Final):
 
 ## 6. Fluxo de uso
 
-1. **Tipo de Audiência** — tipo + sub-modelo + plantão regional
+1. **Tipo de Audiência** — tipo + sub-modelo + plantão regional. Aqui fica o
+   atalho **"Extrair dados de um PDF"** (preenche os campos automaticamente) ou
+   segue-se manual
 2. **Cabeçalho** — processo, nome, data/hora, partes
 3. **Dados da Audiência (BNMP)**
 4. **Dados da Pessoa**
